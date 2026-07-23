@@ -43,6 +43,14 @@ class WeaponBase {
       }
       this._trails = []
     }
+    if (this._sparks) {
+      for (const s of this._sparks) {
+        this.scene.remove(s)
+        s.geometry.dispose()
+        s.material.dispose()
+      }
+      this._sparks = []
+    }
   }
 
   createMesh() {
@@ -100,6 +108,7 @@ class WeaponBase {
       this._updateWeaponTransform()
     }
     this.updateTrails()
+    this._updateSparks(delta)
   }
 
   _updateWeaponTransform() {
@@ -261,40 +270,21 @@ class WeaponBase {
 
   createImpactSpark(point) {
     const count = 5 + Math.floor(Math.random() * 4)
-    const particles = []
     const color = this.trailColor || 0xffaa44
+    if (!this._sparks) this._sparks = []
     for (let i = 0; i < count; i++) {
-      const spark = new THREE.Mesh(
+      const mesh = new THREE.Mesh(
         new THREE.SphereGeometry(0.015, 4, 4),
         new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 1 })
       )
-      spark.position.copy(point)
-      spark.userData.vel = new THREE.Vector3(
+      mesh.position.copy(point)
+      mesh.userData.vel = new THREE.Vector3(
         (Math.random() - 0.5) * 3, (Math.random() - 0.5) * 3, (Math.random() - 0.5) * 3
       )
-      spark.userData.life = 0.3 + Math.random() * 0.2
-      this.scene.add(spark)
-      particles.push(spark)
-    }
-    if (!this._sparks) this._sparks = []
-    for (const s of particles) {
-      this._sparks.push(s)
-      const start = performance.now()
-      const dur = s.userData.life * 1000
-      const update = () => {
-        const elapsed = (performance.now() - start) / 1000
-        if (elapsed >= s.userData.life) {
-          this.scene.remove(s)
-          s.geometry.dispose()
-          s.material.dispose()
-          return
-        }
-        s.position.add(s.userData.vel.clone().multiplyScalar(0.016))
-        s.userData.vel.y -= 4 * 0.016
-        s.material.opacity = 1 - elapsed / s.userData.life
-        requestAnimationFrame(update)
-      }
-      update()
+      mesh.userData.life = 0.3 + Math.random() * 0.2
+      mesh.userData.elapsed = 0
+      this.scene.add(mesh)
+      this._sparks.push(mesh)
     }
   }
 
@@ -343,6 +333,24 @@ class WeaponBase {
         this._trails.splice(i, 1)
       } else {
         t.mesh.material.opacity = alpha * 0.85
+      }
+    }
+  }
+
+  _updateSparks(delta) {
+    if (!this._sparks) return
+    for (let i = this._sparks.length - 1; i >= 0; i--) {
+      const s = this._sparks[i]
+      s.userData.elapsed += delta
+      if (s.userData.elapsed >= s.userData.life) {
+        this.scene.remove(s)
+        s.geometry.dispose()
+        s.material.dispose()
+        this._sparks.splice(i, 1)
+      } else {
+        s.position.add(s.userData.vel.clone().multiplyScalar(delta))
+        s.userData.vel.y -= 4 * delta
+        s.material.opacity = 1 - s.userData.elapsed / s.userData.life
       }
     }
   }

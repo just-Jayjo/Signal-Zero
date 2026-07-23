@@ -1,5 +1,32 @@
 # PROGRESS — 訊號：零層
 
+## 2026-07-24 Session — SignalCore 最終Boss 彈速/準度下修 + game.js 重構清理
+
+### 使用者回饋
+- 最終Boss（Level 5 Signal Core）子彈太快太準，完全躲不開
+
+### SignalCore 參數調整
+- **彈速大幅下修**: `14 + this.phase * 3` → `8 + this.phase * 2`（P1:17→10, P3:23→14）
+- **射擊間隔拉長**: cooldown `[0.8, 0.9, 1.0]` → `[1.5, 1.8, 2.0]`，初始 timer `1.5→2.5`
+- **瞄準射擊散佈增加**: spread `[0.15, 0.25, 0.35]` → `[0.25, 0.35, 0.45]`
+- **追蹤光球**: speed 5→4（更慢）、trackStrength `0.8+phase*0.2→0.3+phase*0.15`（追蹤更弱）、spread 0.6→1.2（散更開）、發射間隔 `[3.5/3.0/2.5]→[4.5/4.0/3.5]`
+- **飛彈**: speed `8+random*3→5+random*2`
+- **衝擊波**: 擴散速度 `6+phase*1.5→4+phase*1.0`
+
+### Game.js 程式碼重構（第二波）
+- 從 `game.js` 再拆出 3 個模組（沿用既有 mixin pattern）:
+  - `gameInit.js`: `_preloadAssets`、`init`（場景/渲染器/燈光/系統初始化）
+  - `gameInput.js`: `listen`/`unlisten`/`setDifficulty`/`lockPointer`/`resize`
+  - `gameLoop.js`: `start`/`animate`/`restart`/`restartContinue`
+- `game.js` 從 597 行降至 **139 行**（-77%），僅保留 constructor + static getter + mixin 接線
+- Build 驗證: 37 modules, 858 KB, 0 errors
+
+### Bug 修復
+- **`weapon.js:reset()` 崩潰**: spark 存 mesh 本身但 `reset()` 錯用 `s.mesh.geometry` → TypeError，改 `s.geometry` 直接操作
+- **`game.js` 匿名監聽器無法移除**: `contextmenu`/`click`/`fullscreenchange` 用匿名箭頭函式註冊，`unlisten()` 無法解除。改存入 `this._bound` 統一管理
+- **`weapon.js` spark 獨立 RAF 迴圈**: 每顆 spark 各自 `requestAnimationFrame(update)`，大量射擊後孤兒 RAF 累積。改為主迴圈 `_updateSparks(delta)` 統一更新
+- **`level5.js` 祭壇階梯錯誤加入 walls**: 儀式平台階梯（高度 0.1）被 `this.walls.push(step)` 變成隱形牆，移除
+
 ## 2026-07-20 Session (Final) — 全五層雜物清除 + 地形起伏 + L4/L5 Boss 削弱
 
 ### 美術重設計

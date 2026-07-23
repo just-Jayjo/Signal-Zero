@@ -319,7 +319,6 @@ export class Level5 {
       )
       this.scene.add(step)
       this.decorations.push(step)
-      this.walls.push(step)
     }
 
     const coreMat = new THREE.MeshStandardMaterial({

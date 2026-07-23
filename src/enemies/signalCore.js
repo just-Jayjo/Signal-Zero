@@ -31,7 +31,7 @@ export class SignalCore {
     this._laserBeam = null
     this._laserAngle = 0
 
-    this.shootTimer = 1.5
+    this.shootTimer = 2.5
     this.orbitalTimer = 99.0
     this.pulseTimer = 99.0
     this.summonTimer = 99.0
@@ -228,14 +228,14 @@ export class SignalCore {
     this.shootTimer -= delta
     if (this.shootTimer <= 0 && dist < 40) {
       this._fireAimedShot()
-      const cooldowns = [0.8, 0.9, 1.0]
+      const cooldowns = [1.5, 1.8, 2.0]
       this.shootTimer = cooldowns[Math.min(this.phase - 1, cooldowns.length - 1)]
     }
 
     this.trackTimer -= delta
     if (this.trackTimer <= 0 && dist < 40) {
       this._fireTrackingOrbs()
-      this.trackTimer = this.phase === 1 ? 3.5 : (this.phase === 2 ? 3.0 : 2.5)
+      this.trackTimer = this.phase === 1 ? 4.5 : (this.phase === 2 ? 4.0 : 3.5)
     }
 
     if (this.phase >= 2) {
@@ -446,7 +446,7 @@ export class SignalCore {
     const counts = [2, 3, 3]
     const damages = [4, 5, 7]
     const colors = [0xff4488, 0xff2266, 0xff0000]
-    const spreadAmount = [0.15, 0.25, 0.35]
+    const spreadAmount = [0.25, 0.35, 0.45]
     const count = counts[Math.min(this.phase - 1, counts.length - 1)]
 
     for (let i = 0; i < count; i++) {
@@ -465,10 +465,10 @@ export class SignalCore {
     if (this._game && this._game.audio) this._game.audio.playSFX('bossPulse')
     const origin = this.mesh.position.clone()
     origin.y += 0.5
-    const count = 2 + this.phase * 1
+    const count = 2 + this.phase
     const color = 0x00ffff
     const damage = 3 + this.phase
-    const spread = 0.6
+    const spread = 1.2
 
     for (let i = 0; i < count; i++) {
       const angle = (i / count) * Math.PI * 2 + (Math.random() - 0.5) * spread
@@ -483,12 +483,12 @@ export class SignalCore {
       this.mesh.parent?.add(mesh)
       this._projectiles.push({
         mesh, dir: dir.clone(),
-        speed: 5,
-        lifetime: 5.0,
+        speed: 4,
+        lifetime: 4.0,
         damage,
         color,
         tracking: true,
-        trackStrength: 0.8 + this.phase * 0.2
+        trackStrength: 0.3 + this.phase * 0.15
       })
     }
   }
@@ -530,7 +530,7 @@ export class SignalCore {
 
     this._shockwaves.push({
       mesh, baseRadius: 0.5, radius: 0.5,
-      speed: 6 + this.phase * 1.5, life: 2.0, maxLife: 2.0,
+      speed: 4 + this.phase * 1.0, life: 2.0, maxLife: 2.0,
       damage: 4 + this.phase * 2, hasHit: false
     })
   }
@@ -554,7 +554,7 @@ export class SignalCore {
         const mesh = new THREE.Mesh(new THREE.SphereGeometry(0.1, 6, 6), mat)
         mesh.position.copy(origin)
         this.mesh.parent?.add(mesh)
-        const speed = 8 + Math.random() * 3
+        const speed = 5 + Math.random() * 2
         this._projectiles.push({ mesh, dir, speed, lifetime: 3.0, damage: 10, color: 0xff8800 })
       }, i * 200)
     }
@@ -742,7 +742,7 @@ export class SignalCore {
     mesh.position.copy(origin)
     this.mesh.parent?.add(mesh)
 
-    const speed = 14 + this.phase * 3
+    const speed = 8 + this.phase * 2
     const lifetime = 3.0
     this._projectiles.push({ mesh, dir: dir.clone(), speed, lifetime, damage, color })
   }
