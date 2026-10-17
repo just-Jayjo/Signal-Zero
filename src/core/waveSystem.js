@@ -15,6 +15,7 @@ export class WaveSystem {
     this.game = game
     this.waves = []
     this.currentWave = -1
+    this.currentWaveTotal = 0
     this.active = false
     this.waveDelay = 0
     this._countdownActive = false
@@ -26,6 +27,7 @@ export class WaveSystem {
   reset() {
     this.waves = []
     this.currentWave = -1
+    this.currentWaveTotal = 0
     this.active = false
     this.waveDelay = 0
     this._countdownActive = false
@@ -78,6 +80,9 @@ export class WaveSystem {
       return
     }
     const def = this.waves[this.currentWave]
+    if (def) {
+      this.currentWaveTotal = (def.enemies || []).reduce((sum, e) => sum + (e.count || 1), 0)
+    }
     const delay = def.delay || 0
     if (delay > 0) {
       this._countdown(delay, () => this._spawnWave(def))
@@ -145,7 +150,10 @@ export class WaveSystem {
       return
     }
     if (!this.active) return
-    const alive = this.game.enemies.filter(e => !e.dead).length
+    /* 手動計數，避免每幀 filter 產生新陣列 */
+    const list = this.game.enemies
+    let alive = 0
+    for (let i = 0; i < list.length; i++) if (!list[i].dead) alive++
     if (alive === 0) {
       this._startNextWave()
     }

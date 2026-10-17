@@ -13,6 +13,9 @@ export function addInputMethods(Game) {
     this.renderer.domElement.addEventListener('compositionend', this._bound.preventComposition)
     this.renderer.domElement.addEventListener('contextmenu', this._bound.contextmenu)
     this.renderer.domElement.addEventListener('click', this._bound.click)
+    /* unlisten() 會把 fullscreenchange 拔掉，這裡必須加回來，
+       否則死亡／退出訓練後再玩，全螢幕狀態變化就不會觸發 resize() */
+    document.addEventListener('fullscreenchange', this._bound.fullscreenchange)
   }
 
   Game.prototype.unlisten = function() {
@@ -36,8 +39,33 @@ export function addInputMethods(Game) {
   }
 
   Game.prototype.lockPointer = function() {
+    if (this.isTouch) return
     if (this.player) this.player._pointerLockFrame = 0
-    this.renderer.domElement.requestPointerLock()
+    try {
+      const r = this.renderer.domElement.requestPointerLock()
+      if (r && typeof r.catch === 'function') r.catch(() => {})
+    } catch (e) { /* 指標鎖定不可用時略過 */ }
+  }
+
+  Game.prototype.openPauseMenu = function() {
+    if (!this.running || this.transitioning || this.endingSequence) return
+    if (this.narrative && this.narrative.isActive()) return
+    this.paused = true
+    this.touchFiring = false
+    if (this._touchReset) this._touchReset()
+    const menu = document.getElementById('pause-menu')
+    if (menu) menu.style.display = 'flex'
+    document.body.classList.add('ui-paused')
+    if (document.pointerLockElement) document.exitPointerLock()
+  }
+
+  Game.prototype.closePauseMenu = function() {
+    const menu = document.getElementById('pause-menu')
+    if (menu) menu.style.display = 'none'
+    document.body.classList.remove('ui-paused')
+    if (this.running) this.paused = false
+    if (this.isTouch) return
+    this.lockPointer()
   }
 
   Game.prototype.resize = function() {

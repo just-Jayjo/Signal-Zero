@@ -14,8 +14,13 @@ export function addLevelMethods(Game, LEVEL_CLASSES, _textureCache, _modelCache)
       this.scene.background = new THREE.Color(fogBase)
       this.scene.fog = new THREE.FogExp2(fogBase, this.difficulty === 'hard' ? 0.018 : this.difficulty === 'easy' ? 0.008 : 0.012)
       if (this.audio && !this.trainingMode) {
+        this.audio.resumeContext()
         if (this.currentLevel === 4) {
-          this.audio.playBGMFile('./audio/bgm_boss.wav', () => this.audio.playBossBGMLayer())
+          this.audio.playBGMFile('./audio/bgm_boss.wav', null)
+          this.audio.playBossBGMLayer(true)
+        } else if (this.currentLevel === 2) {
+          this.audio.playBGMFile('./audio/bgm_industrial.mp3', null)
+          this.audio.playBossBGMLayer(true)
         } else {
           this.audio.playBGMFile('./audio/bgm_normal.wav', () => this.audio.playBGMLayer())
         }
@@ -66,8 +71,8 @@ export function addLevelMethods(Game, LEVEL_CLASSES, _textureCache, _modelCache)
           { delay: 3, enemies: [{ type: 'rusher', count: 5 }], message: '波次 2/6：快攻壓制' },
           { delay: 3, enemies: [{ type: 'patrolBot', count: 4, hpMult: 1.2 }, { type: 'rusher', count: 3 }], message: '波次 3/6：聯合攻勢' },
           { delay: 4, enemies: [{ type: 'sniper', count: 3, hpMult: 1.2, spawnArea: { x: 4, z: 4, w: 8, d: 8 } }], message: '波次 4/6：多重狙擊' },
-          { delay: 4, enemies: [{ type: 'patrolBot', count: 4, hpMult: 1.3 }, { type: 'rusher', count: 5 }], message: '波次 5/6：猛烈反擊' },
-          { delay: 5, enemies: [{ type: 'patrolBot', count: 5, hpMult: 1.3 }, { type: 'rusher', count: 5 }, { type: 'sniper', count: 2, hpMult: 1.2 }], message: '波次 6/6：最終防線' }
+          { delay: 4, enemies: [{ type: 'patrolBot', count: 3, hpMult: 1.3 }, { type: 'rusher', count: 4 }], message: '波次 5/6：猛烈反擊' },
+          { delay: 5, enemies: [{ type: 'patrolBot', count: 4, hpMult: 1.3 }, { type: 'rusher', count: 4 }, { type: 'sniper', count: 2, hpMult: 1.2 }], message: '波次 6/6：最終防線' }
         ])
         break
       case 4:
@@ -211,6 +216,7 @@ export function addLevelMethods(Game, LEVEL_CLASSES, _textureCache, _modelCache)
   Game.prototype.advanceLevel = function() {
     const prevLevel = this.currentLevel
     if (prevLevel === 2) {
+      try { localStorage.setItem('sz_boss1', '1') } catch {}
       this.player.maxHealth = 150
       this.player.health = 150
       this.player.segmentSize = this.player.maxHealth / this.player.segmentCount
@@ -234,6 +240,14 @@ export function addLevelMethods(Game, LEVEL_CLASSES, _textureCache, _modelCache)
       }
     }
     this.enemies = []
+    /* 舊的資料拾取物要真的從場上移除，直接覆寫陣列會把它們留在場景裡 */
+    if (this.datalogPickups) {
+      for (const d of this.datalogPickups) {
+        this.scene.remove(d)
+        if (d.geometry) d.geometry.dispose()
+        if (d.material) d.material.dispose()
+      }
+    }
     this.datalogPickups = []
     if (this._explosions) {
       for (const e of this._explosions) {
@@ -268,18 +282,19 @@ export function addLevelMethods(Game, LEVEL_CLASSES, _textureCache, _modelCache)
     this.player.yaw = yaw
 
     const pages = NARRATIVE_LEVELS[idx] || [`進入 ${LEVEL_NAMES[idx]}`]
+    const body = pages.slice(1).join('\n')
 
-    if (this.currentLevel === 2) {
+    this._startLevelTransition(LEVEL_NAMES[idx] || '', body, () => {
       this._buildCurrentLevel()
-      this.narrative.show(NARRATIVE_BOSS_INTRO, () => {
-        this._spawnBossWithDescent()
-      })
-    } else {
-      this.narrative.show(pages, () => {
-        this._buildCurrentLevel()
+    }, () => {
+      if (this.currentLevel === 2) {
+        this.narrative.show(NARRATIVE_BOSS_INTRO, () => {
+          this._spawnBossWithDescent()
+        })
+      } else {
         this.transitioning = false
         this.lockPointer()
-      })
-    }
+      }
+    })
   }
 }

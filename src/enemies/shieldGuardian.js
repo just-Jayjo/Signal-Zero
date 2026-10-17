@@ -6,12 +6,12 @@ export class ShieldGuardian extends PatrolBot {
   constructor(position) {
     super(position)
     this.type = 'shieldGuardian'
-    this.hp = 800
-    this.maxHp = 800
+    this.hp = 700
+    this.maxHp = 700
     this.speed = 2.2
-    this.damage = 5
-    this.shootCooldown = 2.2
-    this.shootTimer = 2.0
+    this.damage = 4
+    this.shootCooldown = 2.5
+    this.shootTimer = 2.2
     this.detectionRange = 30
     this.radius = 1.2
     this.shieldActive = false
@@ -37,6 +37,7 @@ export class ShieldGuardian extends PatrolBot {
     this._laserActive = false
     this._descentProtection = 3.0
     this._deathExplosionTimer = 0
+    this._timers = new Set()
     this.createShield()
   }
 
@@ -368,8 +369,8 @@ export class ShieldGuardian extends PatrolBot {
       this._enraged = true
       this.phase = 2
       this.speed = 2.8
-      this.shootCooldown = 1.5
-      this.damage = 7
+      this.shootCooldown = 1.8
+      this.damage = 6
       if (this._coreMesh) {
         this._coreMesh.material.emissiveIntensity = 4.0
       }
@@ -395,8 +396,8 @@ export class ShieldGuardian extends PatrolBot {
         this._enraged = true
         this.phase = 2
         this.speed = 2.8
-        this.shootCooldown = 1.5
-        this.damage = 7
+        this.shootCooldown = 1.8
+        this.damage = 6
         if (this._coreMesh) this._coreMesh.material.emissiveIntensity = 4.0
       }
       if (this.hp <= 0) this.die()
@@ -440,16 +441,16 @@ export class ShieldGuardian extends PatrolBot {
             scene.add(spark)
             const dir = offset.clone().normalize()
             let t = 0
-            const iv = setInterval(() => {
+            const iv = this._addTimer(setInterval(() => {
               t += 0.016
               spark.position.add(dir.clone().multiplyScalar(3 * 0.016))
               if (t >= 0.5) {
-                clearInterval(iv)
+                this._clearTimer(iv)
                 scene.remove(spark)
                 spark.geometry.dispose()
                 spark.material.dispose()
               }
-            }, 16)
+            }, 16))
           }
         }
       }
@@ -594,7 +595,7 @@ export class ShieldGuardian extends PatrolBot {
     const travelTime = 1.8
     let elapsed = 0
 
-    const interval = setInterval(() => {
+    const interval = this._addTimer(setInterval(() => {
       elapsed += 0.016
       const t = elapsed / travelTime
       const pos = trail.position.clone().add(dir.clone().multiplyScalar(speed * 0.016))
@@ -603,7 +604,7 @@ export class ShieldGuardian extends PatrolBot {
           const test = box.clone()
           test.expandByScalar(0.3)
           if (test.containsPoint(pos)) {
-            clearInterval(interval)
+            this._clearTimer(interval)
             trail.parent?.remove(trail)
             trail.geometry.dispose()
             trail.material.dispose()
@@ -614,7 +615,7 @@ export class ShieldGuardian extends PatrolBot {
       trail.position.copy(pos)
       const hitDist = player.camera.position.distanceTo(trail.position)
       if (hitDist < 1.2) {
-        clearInterval(interval)
+        this._clearTimer(interval)
         player.takeDamage(this.damage)
         this._createExplosion(trail.position)
         trail.parent?.remove(trail)
@@ -623,14 +624,14 @@ export class ShieldGuardian extends PatrolBot {
         return
       }
       if (t >= 1) {
-        clearInterval(interval)
+        this._clearTimer(interval)
         this._createExplosion(trail.position)
         trail.parent?.remove(trail)
         trail.geometry.dispose()
         trail.material.dispose()
         return
       }
-    }, 16)
+    }, 16))
   }
 
   _createExplosion(pos) {
@@ -641,10 +642,10 @@ export class ShieldGuardian extends PatrolBot {
     const scene = this.mesh.parent || this.mesh.scene
     if (scene) scene.add(exp)
     let t = 0
-    const iv = setInterval(() => {
+    const iv = this._addTimer(setInterval(() => {
       t += 0.016
       if (t >= 0.3) {
-        clearInterval(iv)
+        this._clearTimer(iv)
         exp.parent?.remove(exp)
         exp.geometry.dispose()
         exp.material.dispose()
@@ -652,7 +653,7 @@ export class ShieldGuardian extends PatrolBot {
       }
       exp.scale.setScalar(1 + t * 10)
       exp.material.opacity = 1 - t / 0.3
-    }, 16)
+    }, 16))
   }
 
   _fireCannonDir(player, dir, collisionBoxes) {
@@ -667,7 +668,7 @@ export class ShieldGuardian extends PatrolBot {
     const travelTime = 1.8
     let elapsed = 0
 
-    const interval = setInterval(() => {
+    const interval = this._addTimer(setInterval(() => {
       elapsed += 0.016
       const t = elapsed / travelTime
       const pos = trail.position.clone().add(dir.clone().multiplyScalar(speed * 0.016))
@@ -676,7 +677,7 @@ export class ShieldGuardian extends PatrolBot {
           const test = box.clone()
           test.expandByScalar(0.3)
           if (test.containsPoint(pos)) {
-            clearInterval(interval)
+            this._clearTimer(interval)
             trail.parent?.remove(trail)
             trail.geometry.dispose()
             trail.material.dispose()
@@ -687,7 +688,7 @@ export class ShieldGuardian extends PatrolBot {
       trail.position.copy(pos)
       const hitDist = player.camera.position.distanceTo(trail.position)
       if (hitDist < 1.2) {
-        clearInterval(interval)
+        this._clearTimer(interval)
         player.takeDamage(this.damage)
         this._createExplosion(trail.position)
         trail.parent?.remove(trail)
@@ -696,14 +697,14 @@ export class ShieldGuardian extends PatrolBot {
         return
       }
       if (t >= 1) {
-        clearInterval(interval)
+        this._clearTimer(interval)
         this._createExplosion(trail.position)
         trail.parent?.remove(trail)
         trail.geometry.dispose()
         trail.material.dispose()
         return
       }
-    }, 16)
+    }, 16))
   }
 
   _summonMinions() {
@@ -750,21 +751,21 @@ export class ShieldGuardian extends PatrolBot {
     warning.position.y = 0.03
     scene.add(warning)
     let warnTimer = 0
-    const warnIv = setInterval(() => {
+    const warnIv = this._addTimer(setInterval(() => {
       warnTimer += 0.016
       warning.scale.setScalar(1 + warnTimer * 2)
       warning.material.opacity = 0.08 + Math.sin(warnTimer * 20) * 0.06
       if (warnTimer >= 0.5) {
         const hintEl = document.getElementById('jump-hint')
         if (hintEl) { hintEl.style.opacity = '0'; setTimeout(() => hintEl.remove(), 300) }
-        clearInterval(warnIv)
+        this._clearTimer(warnIv)
         warning.parent?.remove(warning)
         warning.geometry.dispose()
         warning.material.dispose()
 
         const slamDist = player.camera.position.distanceTo(this.mesh.position)
         if (slamDist < 6 && (!player._isAirborne)) {
-          player.takeDamage(this._enraged ? 6 : 4)
+          player.takeDamage(this._enraged ? 5 : 3)
         }
 
         const expMat = new THREE.MeshBasicMaterial({ color: 0xff6600, transparent: true, opacity: 0.3, side: THREE.DoubleSide })
@@ -774,10 +775,10 @@ export class ShieldGuardian extends PatrolBot {
         ring.position.y = 0.05
         scene.add(ring)
         let t = 0
-        const iv = setInterval(() => {
+        const iv = this._addTimer(setInterval(() => {
           t += 0.016
           if (t >= 0.6) {
-            clearInterval(iv)
+            this._clearTimer(iv)
             ring.parent?.remove(ring)
             ring.geometry.dispose()
             ring.material.dispose()
@@ -786,9 +787,9 @@ export class ShieldGuardian extends PatrolBot {
           const s = 1 + t * 8
           ring.scale.setScalar(s)
           ring.material.opacity = 0.3 * (1 - t / 0.6)
-        }, 16)
+        }, 16))
       }
-    }, 16)
+    }, 16))
   }
 
   _fireMissileVolley(player, collisionBoxes) {
@@ -812,10 +813,10 @@ export class ShieldGuardian extends PatrolBot {
         const speed = 18
         const lifetime = 1.5
         let elapsed = 0
-        const iv = setInterval(() => {
+        const iv = this._addTimer(setInterval(() => {
           elapsed += 0.016
           if (elapsed >= lifetime || this.dead) {
-            clearInterval(iv)
+            this._clearTimer(iv)
             trail.parent?.remove(trail)
             trail.geometry.dispose()
             trail.material.dispose()
@@ -827,7 +828,7 @@ export class ShieldGuardian extends PatrolBot {
               const test = box.clone()
               test.expandByScalar(0.3)
               if (test.containsPoint(pos)) {
-                clearInterval(iv)
+                this._clearTimer(iv)
                 trail.parent?.remove(trail)
                 trail.geometry.dispose()
                 trail.material.dispose()
@@ -838,13 +839,13 @@ export class ShieldGuardian extends PatrolBot {
           trail.position.copy(pos)
           const hitDist = player.camera.position.distanceTo(trail.position)
           if (hitDist < 1.8) {
-            player.takeDamage(this.damage + 3)
-            clearInterval(iv)
+            player.takeDamage(this.damage + 2)
+            this._clearTimer(iv)
             trail.parent?.remove(trail)
             trail.geometry.dispose()
             trail.material.dispose()
           }
-        }, 16)
+        }, 16))
       }, i * 150)
     }
   }
@@ -874,7 +875,7 @@ export class ShieldGuardian extends PatrolBot {
     this._laserBeam.rotateX(Math.PI / 2)
     const dist = this.mesh.position.distanceTo(player.camera.position)
     if (dist < 3.5) {
-      player.takeDamage(10 * delta)
+      player.takeDamage(7 * delta)
     }
     if (this._laserTimer <= 0) {
       this._laserBeam.parent?.remove(this._laserBeam)
@@ -884,6 +885,9 @@ export class ShieldGuardian extends PatrolBot {
       this._laserActive = false
     }
   }
+
+  _addTimer(id) { if (this._timers) this._timers.add(id); return id }
+  _clearTimer(id) { clearInterval(id); clearTimeout(id); if (this._timers) this._timers.delete(id) }
 
   die() {
     this.dead = true
@@ -907,5 +911,7 @@ export class ShieldGuardian extends PatrolBot {
         }
       })
     }
+    for (const id of this._timers) clearInterval(id)
+    this._timers.clear()
   }
 }

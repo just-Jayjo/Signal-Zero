@@ -2,7 +2,11 @@
 <html lang="zh-Hant">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="theme-color" content="#050a14">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' fill='%230a1420'/><circle cx='16' cy='16' r='6' fill='none' stroke='%2300f2ff' stroke-width='3'/></svg>">
   <title>訊號：零層 — Signal Zero</title>
   <style>
@@ -38,6 +42,23 @@
     @keyframes blink { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
 
     #hud { position: fixed; inset: 0; pointer-events: none; z-index: 10; }
+    #hud-guide-btn {
+      position: fixed; top: 8px; left: 14px; padding: 5px 13px;
+      background: rgba(4,10,20,0.72); border: 1px solid rgba(0,242,255,0.3);
+      color: rgba(0,242,255,0.7); font-family: 'Courier New', monospace;
+      font-size: 0.68rem; letter-spacing: 0.15em; cursor: pointer;
+      transition: all 0.2s; z-index: 415;
+    }
+    #hud-guide-btn:hover { border-color: #00f2ff; color: #00f2ff; }
+    body.touch-mode #hud-guide-btn { display: none !important; }
+
+    /* 桌機（兩個小螢幕 media 都不成立）：操作指南按鈕與內容放大 */
+    @media (min-width: 901px) and (min-height: 521px) {
+      #hud-guide-btn { padding: 9px 22px; font-size: 0.92rem; letter-spacing: 0.18em; }
+      #pause-menu #pm-guide-btn { font-size: 1.06rem; padding: 11px 24px; }
+      #pm-guide .pg-row { font-size: 0.94rem; padding: 7px 0; }
+      #pm-guide .pg-ico { transform: scale(1.25); }
+    }
     #hud::before, #hud::after {
       content: ''; position: absolute; width: 40px; height: 40px; border-color: rgba(0,242,255,0.2); border-style: solid; z-index: 11;
     }
@@ -82,7 +103,7 @@
     #real-health-bar #real-health-num { position: absolute; top: 0; right: -55px; color: rgba(255,62,62,0.5); font-size: 0.8rem; line-height: 14px; }
 
     #enemy-panel {
-      position: absolute; top: 30px; left: 25px; z-index: 11;
+      position: absolute; top: 46px; left: 25px; z-index: 11;
     }
     #enemy-panel .label { color: rgba(0,242,255,0.5); font-size: 0.95rem; letter-spacing: 0.2em; margin-bottom: 4px; }
     #enemy-count { color: rgba(255,255,255,0.6); font-size: 1.8rem; letter-spacing: 0.05em; text-shadow: 0 0 10px rgba(0,242,255,0.2); }
@@ -269,7 +290,7 @@
     #controls-hint .ch-row { color: rgba(0,242,255,0.35); font-size: 0.8rem; letter-spacing: 0.15em; margin: 3px 0; }
     #controls-hint .ch-key { color: rgba(0,242,255,0.6); }
 
-    #training-select { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 30; justify-content: center; align-items: center; background: rgba(5,10,20,0.92); }
+    #training-select { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 60; justify-content: center; align-items: center; background: rgba(5,10,20,0.92); }
     #training-select .panel { text-align: center; max-width: 600px; }
     #training-select h2 { color: #00f2ff; font-size: 1rem; letter-spacing: 0.3em; margin-bottom: 24px; }
     .training-options { display: flex; flex-direction: column; gap: 10px; }
@@ -281,6 +302,20 @@
     .training-btn:hover { background: rgba(0,242,255,0.12); border-color: rgba(0,242,255,0.5); }
     .training-btn .enemy-name { display: block; color: #00f2ff; font-size: 0.85rem; letter-spacing: 0.2em; margin-bottom: 4px; }
     .training-btn .enemy-desc { display: block; color: rgba(255,255,255,0.4); font-size: 0.7rem; letter-spacing: 0.1em; }
+    .training-boss-label {
+      margin-top: 20px; margin-bottom: 8px; color: rgba(255,85,85,0.75);
+      font-size: 0.72rem; letter-spacing: 0.4em; text-align: center;
+    }
+    .boss-options { flex-direction: row; }
+    .boss-options .training-btn { flex: 1 1 200px; }
+    .training-btn.boss-btn { border-color: rgba(255,70,70,0.4); }
+    .training-btn.boss-btn .enemy-name { color: #ff5555; }
+    .training-btn.boss-btn:hover { background: rgba(255,60,60,0.1); border-color: rgba(255,70,70,0.75); }
+    .training-btn.boss-btn.locked {
+      opacity: 0.32; filter: grayscale(1); cursor: not-allowed;
+      border-color: rgba(255,255,255,0.14);
+    }
+    .training-btn.boss-btn.locked:hover { background: rgba(0,242,255,0.06); border-color: rgba(255,255,255,0.14); }
     #training-hint {
       position: fixed; bottom: 80px; left: 50%; transform: translateX(-50%);
       z-index: 13; pointer-events: none; text-align: center;
@@ -344,6 +379,336 @@
     .ico-cross::before { content: ''; display: block; width: .65em; height: .65em; background: linear-gradient(45deg,transparent 40%,currentColor 40% 60%,transparent 60%),linear-gradient(-45deg,transparent 40%,currentColor 40% 60%,transparent 60%); }
     .ico-triangle::before { content: ''; display: block; width: 0; height: 0; border-left: .35em solid transparent; border-right: .35em solid transparent; border-top: .5em solid currentColor; }
     .ico-arrow::before { content: ''; display: block; width: 0; height: 0; border-top: .3em solid transparent; border-bottom: .3em solid transparent; border-left: .45em solid currentColor; }
+
+    /* ===== 結尾電影黑邊 ===== */
+    #cinema-bars { position: fixed; inset: 0; z-index: 260; pointer-events: none; display: none; }
+    #cinema-bars .cb {
+      position: absolute; left: 0; right: 0; height: 0; background: #000;
+      transition: height 1.4s cubic-bezier(0.4, 0, 0.2, 1);
+      box-shadow: 0 0 24px rgba(0,0,0,0.9);
+    }
+    #cinema-bars .cb-top { top: 0; }
+    #cinema-bars .cb-bottom { bottom: 0; }
+    body.ending-cinema #cinema-bars { display: block; }
+    body.ending-cinema #cinema-bars .cb { height: 10vh; }
+
+    /* ===== 橫屏提示 ===== */
+    #rotate-overlay {
+      position: fixed; inset: 0; z-index: 700;
+      background: rgba(5,10,20,0.98);
+      display: none; align-items: center; justify-content: center;
+      flex-direction: column; gap: 26px; text-align: center;
+      color: #00f2ff; font-size: 1rem; letter-spacing: 0.25em;
+      padding: 20px;
+    }
+    #rotate-overlay .rot-phone {
+      width: 64px; height: 104px; border: 3px solid #00f2ff; border-radius: 9px;
+      position: relative; box-shadow: 0 0 30px rgba(0,242,255,0.25);
+      animation: rotPhone 2.6s ease-in-out infinite;
+    }
+    #rotate-overlay .rot-phone::after {
+      content: ''; position: absolute; bottom: 9px; left: 50%; transform: translateX(-50%);
+      width: 18px; height: 3px; background: #00f2ff; border-radius: 2px;
+    }
+    #rotate-overlay .rot-sub { font-size: 0.7rem; color: rgba(0,242,255,0.4); letter-spacing: 0.3em; }
+    @keyframes rotPhone { 0%, 30% { transform: rotate(0deg); } 60%, 100% { transform: rotate(-90deg); } }
+
+    /* ===== 觸控控制 ===== */
+    #touch-controls { position: fixed; inset: 0; z-index: 30; pointer-events: none; display: none; }
+    body.touch-mode #touch-controls { display: block; }
+    body.touch-mode.ui-paused #touch-controls { display: none; }
+    body.ending-cinema #touch-controls { display: none; }
+
+    #joystick-zone { position: absolute; left: 0; top: 0; width: 45%; height: 100%; pointer-events: auto; touch-action: none; }
+    #aim-zone { position: absolute; right: 0; top: 0; width: 55%; height: 100%; pointer-events: auto; touch-action: none; }
+
+    #joystick-base {
+      position: absolute; width: 118px; height: 118px; border-radius: 50%;
+      border: 2px solid rgba(0,242,255,0.3); background: rgba(0,242,255,0.05);
+      transform: translate(-50%, -50%); display: none; pointer-events: none;
+      box-shadow: inset 0 0 24px rgba(0,242,255,0.06);
+    }
+    #joystick-base::before {
+      content: ''; position: absolute; inset: 26px; border-radius: 50%;
+      border: 1px dashed rgba(0,242,255,0.14);
+    }
+    #joystick-thumb {
+      position: absolute; width: 50px; height: 50px; border-radius: 50%;
+      background: rgba(0,242,255,0.3); border: 2px solid rgba(0,242,255,0.75);
+      transform: translate(-50%, -50%); display: none; pointer-events: none;
+      box-shadow: 0 0 16px rgba(0,242,255,0.35);
+    }
+
+    .touch-btn {
+      position: absolute; pointer-events: auto; touch-action: none;
+      display: flex; align-items: center; justify-content: center;
+      background: rgba(5,16,28,0.5); border: 2px solid rgba(0,242,255,0.35);
+      color: rgba(0,242,255,0.85); font-family: inherit; cursor: pointer;
+      border-radius: 50%; -webkit-tap-highlight-color: transparent;
+      user-select: none; -webkit-user-select: none;
+      backdrop-filter: blur(3px); -webkit-backdrop-filter: blur(3px);
+      transition: background 0.12s, border-color 0.12s, transform 0.12s;
+    }
+    .touch-btn:active, .touch-btn.tb-on {
+      background: rgba(0,242,255,0.22); border-color: #00f2ff; transform: scale(0.94);
+    }
+
+    #btn-fire {
+      right: 20px; bottom: 30px; width: 74px; height: 74px;
+      z-index: 33;
+      border-color: rgba(0,242,255,0.5);
+    }
+    #btn-jump {
+      right: 110px; bottom: 36px; width: 60px; height: 60px;
+      z-index: 33;
+    }
+    #btn-weapon {
+      right: 20px; bottom: 120px; width: 42px; height: 42px;
+      z-index: 33;
+    }
+    #btn-menu {
+      left: 14px; top: 54px; width: 40px; height: 40px;
+      z-index: 33; border-radius: 9px;
+    }
+
+    .touch-btn .tb-ico { display: block; width: 52%; height: 52%; }
+    #btn-fire .tb-ico { width: 56%; height: 56%; }
+    #btn-weapon .tb-ico, #btn-menu .tb-ico { width: 58%; height: 58%; }
+
+    /* ===== 手機版 HUD 重排 ===== */
+    body.touch-mode #controls-hint { display: none !important; }
+    body.touch-mode #dev-indicator {
+      top: auto; right: auto; left: 16px; bottom: 62px;
+      font-size: 0.58rem; letter-spacing: 0.18em;
+    }
+    /* HUD 內可互動元素（彈藥面板、下一層提示）需蓋過 touch 區域才點得到 */
+    body.touch-mode #hud { z-index: 35; }
+    body.touch-mode #hud::before, body.touch-mode #hud::after { display: none; }
+
+    body.touch-mode #ammo-panel {
+      top: 12px; right: 16px; bottom: auto; text-align: right;
+      pointer-events: auto; padding: 6px 10px;
+      background: rgba(5,16,28,0.4); border: 1px solid rgba(0,242,255,0.14);
+    }
+    body.touch-mode #ammo-display { font-size: 1.5rem; text-shadow: none; }
+    body.touch-mode #ammo-display .reserve { font-size: 0.75rem; }
+    body.touch-mode #weapon-name { font-size: 0.7rem; margin-top: 2px; }
+    body.touch-mode #ammo-panel:active { border-color: rgba(0,242,255,0.5); }
+
+    body.touch-mode #enemy-panel { top: 2px; left: 74px; }
+    body.touch-mode #enemy-panel .label { font-size: 0.62rem; margin-bottom: 2px; }
+    body.touch-mode #enemy-count { font-size: 1.15rem; }
+
+    body.touch-mode #health-panel {
+      bottom: 14px; left: 50%; transform: translateX(-50%);
+      text-align: center; width: 190px;
+    }
+    body.touch-mode #health-panel .label { font-size: 0.6rem; margin-bottom: 3px; letter-spacing: 0.15em; }
+    body.touch-mode #health-bar { width: 190px; height: 15px; margin: 0 auto; }
+    body.touch-mode #health-num { right: -1px; top: -17px; font-size: 0.72rem; line-height: 1; }
+    body.touch-mode #real-health-bar .bar-wrap { width: 190px; height: 10px; margin: 0 auto; }
+    body.touch-mode #real-health-bar #real-health-num { right: -1px; top: -14px; font-size: 0.65rem; line-height: 1; }
+
+    body.touch-mode #kill-feed { top: 92px; right: 16px; font-size: 0.68rem; max-width: 40vw; }
+    body.touch-mode #boss-health-container { top: 62px; bottom: auto; }
+    body.touch-mode #boss-health-bar { width: min(300px, 62vw); height: 11px; }
+    body.touch-mode #boss-health-container .boss-label { font-size: 0.65rem; margin-bottom: 4px; }
+    body.touch-mode #level-hint {
+      top: auto; right: auto; left: 50%; bottom: 68px;
+      transform: translateX(-50%); font-size: 0.95rem;
+      pointer-events: auto; touch-action: manipulation; cursor: pointer;
+      padding: 10px 20px; text-align: center; white-space: nowrap;
+    }
+    body.touch-mode #reload-indicator { bottom: 52px; font-size: 0.72rem; }
+    body.touch-mode #wave-message { top: 44px; font-size: 0.95rem; }
+    body.touch-mode #wave-countdown { top: 76px; font-size: 0.7rem; }
+    body.touch-mode #datalog-popup { top: 100px; padding: 8px 16px; }
+    body.touch-mode #datalog-popup .dl-title { font-size: 0.8rem; }
+    body.touch-mode #training-exit-hud { top: 66px; right: auto; left: 16px; font-size: 0.6rem; padding: 5px 10px; }
+    body.touch-mode #enemy-profile { top: 106px; left: 16px; width: 178px; padding: 10px 12px; }
+    body.touch-mode #crosshair { width: 30px; height: 30px; }
+
+    /* ===== 暫停選單 ===== */
+    #pause-menu {
+      position: fixed; inset: 0; z-index: 400;
+      background: rgba(5,10,20,0.94);
+      display: none; align-items: center; justify-content: center;
+      flex-direction: column; user-select: none; -webkit-user-select: none;
+      padding: 20px;
+    }
+    #pause-menu .pm-panel {
+      border: 1px solid rgba(0,242,255,0.18); padding: 34px 44px 30px;
+      text-align: center; position: relative; min-width: 250px;
+      background: rgba(0,10,20,0.5);
+    }
+    #pause-menu .pm-panel::before {
+      content: 'PAUSED'; position: absolute; top: -10px; left: 22px;
+      background: rgba(5,10,20,0.94); padding: 0 12px;
+      color: rgba(0,242,255,0.55); font-size: 0.65rem; letter-spacing: 0.3em;
+    }
+    #pause-menu .pm-title {
+      font-size: 1.9rem; color: #fff; letter-spacing: 0.4em;
+      text-shadow: 0 0 40px rgba(0,242,255,0.5); font-weight: 400; margin-bottom: 24px;
+    }
+    #pause-menu .pm-btn {
+      display: block; width: 100%; margin: 7px 0;
+      background: transparent; border: 1px solid rgba(0,242,255,0.16);
+      color: rgba(255,255,255,0.72); padding: 13px 20px;
+      font-family: inherit; font-size: 0.92rem; letter-spacing: 0.2em;
+      cursor: pointer; transition: all 0.22s;
+    }
+    #pause-menu .pm-btn:hover, #pause-menu .pm-btn:active {
+      border-color: #00f2ff; color: #00f2ff; background: rgba(0,242,255,0.07);
+    }
+    #pause-menu #pm-guide-btn { margin-top: 17px; }
+    #pause-menu #pm-quit { margin-top: 21px; }
+    #pause-menu .pm-btn.pm-danger:hover, #pause-menu .pm-btn.pm-danger:active {
+      border-color: #ff5555; color: #ff8888; background: rgba(255,60,60,0.08);
+    }
+    #pause-menu .pm-panel { max-height: 92vh; overflow-y: auto; }
+
+    #pm-guide {
+      display: none; position: fixed; inset: 0; z-index: 420;
+      background: rgba(4,8,16,0.96); padding: max(7vh, 64px) 6vw 7vh;
+      overflow-y: auto; text-align: left; box-sizing: border-box;
+    }
+    #pm-guide.open { display: block; }
+    #pm-guide .pg-body { max-width: 560px; margin: 0 auto; }
+    #pm-guide-close {
+      position: fixed; top: 16px; right: 16px; z-index: 421;
+      display: block; margin: 0; padding: 9px 22px;
+      background: rgba(4,8,16,0.9); border: 1px solid rgba(0,242,255,0.3);
+      color: rgba(0,242,255,0.7); font-family: 'Courier New', monospace;
+      font-size: 0.78rem; letter-spacing: 0.15em; cursor: pointer;
+      transition: all 0.2s;
+    }
+    #pm-guide-close:hover { border-color: #00f2ff; color: #00f2ff; }
+
+    #level-transition {
+      position: fixed; inset: 0; z-index: 240; display: none;
+      pointer-events: none; overflow: hidden;
+      font-family: 'Courier New', monospace;
+    }
+    #level-transition.on { display: block; }
+    #lt-bg {
+      position: absolute; inset: 0; background: #000;
+      opacity: 0; transition: opacity 0.85s ease;
+    }
+    #lt-inner {
+      position: absolute; left: 0; right: 0; top: 50%;
+      transform: translateY(-50%); text-align: center;
+      padding: 0 6vw; opacity: 0; transition: opacity 0.7s ease;
+    }
+    #level-transition.show-text #lt-inner { opacity: 1; }
+    #lt-floor {
+      color: rgba(0,242,255,0.55); font-size: 0.68rem;
+      letter-spacing: 0.55em; margin-bottom: 14px;
+    }
+    #lt-name {
+      color: #ffffff; font-size: clamp(1.3rem, 4vw, 2.3rem);
+      letter-spacing: 0.28em; font-weight: 400;
+      text-shadow: 0 0 24px rgba(0,242,255,0.25);
+    }
+    #lt-rule {
+      width: 64px; height: 1px; background: rgba(0,242,255,0.45);
+      margin: 18px auto;
+    }
+    #lt-line {
+      color: rgba(255,255,255,0.6); font-size: clamp(0.78rem, 2vw, 0.95rem);
+      line-height: 1.8; letter-spacing: 0.08em; max-width: 46ch;
+      margin: 0 auto; white-space: pre-line;
+    }
+    #pm-guide .pg-head {
+      color: rgba(0,242,255,0.55); font-size: 0.66rem;
+      letter-spacing: 0.3em; text-align: center; margin-bottom: 10px;
+    }
+    #pm-guide .pg-col { display: none; }
+    #pm-guide .pg-row {
+      display: flex; justify-content: space-between; align-items: baseline;
+      gap: 14px; font-size: 0.73rem; color: rgba(255,255,255,0.55);
+      padding: 4px 0; line-height: 1.5;
+    }
+    #pm-guide .pg-row b {
+      color: rgba(0,242,255,0.85); font-weight: 400;
+      letter-spacing: 0.08em; white-space: nowrap; flex: 0 0 auto;
+    }
+    #pm-guide .pg-row span { text-align: right; }
+    #pm-guide .pg-ico {
+      display: inline-block; width: 1.05em; height: 1.05em;
+      vertical-align: -0.16em; margin-right: 5px;
+    }
+    body.touch-mode #pm-guide [data-mode="touch"] { display: block; }
+    body:not(.touch-mode) #pm-guide [data-mode="key"] { display: block; }
+
+    /* ===== 手機版文字尺寸（敘事 / 結尾） ===== */
+    @media (max-width: 900px), (max-height: 520px) {
+      .narrative-text { font-size: clamp(0.92rem, 2.6vw, 1.1rem) !important; max-width: min(560px, 88vw) !important; line-height: 1.65 !important; max-height: 64vh; overflow-y: auto; padding: 15px 15px !important; }
+      .narrative-prompt { font-size: 0.72rem !important; margin-top: 20px !important; }
+      #ending-overlay .ending-title { font-size: clamp(1.8rem, 6vw, 3.2rem) !important; }
+      #ending-overlay .ending-sub { font-size: clamp(0.9rem, 3vw, 1.3rem) !important; }
+      #ending-overlay .ending-detail { font-size: clamp(0.75rem, 2.4vw, 0.95rem) !important; }
+      #ending-overlay .ending-report { margin-top: 22px !important; }
+      #ending-overlay .ending-credits { margin-top: 24px !important; }
+      #ending-overlay .ending-final { margin-top: 16px !important; }
+      #ending-overlay .ending-stat { font-size: clamp(11px, 2.6vw, 13px) !important; }
+      #ending-overlay .ending-credit-line { font-size: clamp(9px, 2.2vw, 11px) !important; }
+      #blocker .title-area { padding: 40px 34px; }
+      #blocker .title-area h1 { font-size: clamp(2rem, 9vw, 4rem); letter-spacing: 0.25em; }
+      #blocker .title-area .sub { font-size: clamp(0.75rem, 3vw, 1rem); margin-bottom: 26px; }
+      #blocker .title-area .flash { font-size: 0.85rem; }
+      #blocker .title-area .sys-info { margin-top: 24px; font-size: 0.58rem; }
+      #difficulty-select .panel { padding: 30px 26px; width: min(92vw, 420px); }
+      #difficulty-select .panel .ds-title { font-size: clamp(1.7rem, 7vw, 3rem); }
+      #difficulty-select button { min-width: 0; width: 100%; padding: 13px 18px; font-size: 0.95rem; }
+      #results-screen .panel { padding: 34px 26px; min-width: 0; width: min(92vw, 400px); }
+      #results-screen .grade { font-size: clamp(3rem, 13vw, 5rem); }
+      #training-select .panel { width: min(92vw, 520px); padding: 0 16px; }
+      .training-options { flex-direction: row; flex-wrap: wrap; }
+      .training-options .training-btn { flex: 1 1 210px; }
+      .training-boss-label { margin-top: 14px; }
+      .training-btn { padding: 11px 16px; }
+      .training-btn .enemy-desc { font-size: 0.62rem; }
+    }
+
+    /* 手機橫向（高度很小）再收緊 */
+    @media (max-height: 430px) {
+      #pause-menu .pm-panel { padding: 22px 32px 18px; }
+      #pause-menu .pm-title { font-size: 1.4rem; margin-bottom: 14px; }
+      #pause-menu .pm-btn { padding: 10px 16px; font-size: 0.85rem; margin: 5px 0; }
+      #pause-menu #pm-guide .pg-row { font-size: 0.68rem; padding: 3px 0; }
+      #blocker { overflow-y: auto; }
+      #blocker .title-area { padding: 26px 30px; }
+      #blocker .title-area h1 { font-size: clamp(1.7rem, 8vw, 3rem); }
+      #blocker .title-area .sub { margin-bottom: 16px; }
+      #blocker .title-area .divider { margin-bottom: 20px; }
+      #blocker .title-area .sys-info { margin-top: 16px; }
+
+      /* 手機橫向：難度選擇畫面縮小，避免超出螢幕高度 */
+      #difficulty-select { overflow-y: auto; padding: 14px 10px; }
+      #difficulty-select::before, #difficulty-select::after { display: none; }
+      #difficulty-select .panel { padding: 18px 20px 16px; }
+      #difficulty-select .panel .ds-title { font-size: clamp(1.4rem, 6vw, 2.2rem); letter-spacing: 0.3em; }
+      #difficulty-select .panel .ds-sub { font-size: 0.7rem; letter-spacing: 0.35em; margin-bottom: 14px; }
+      #difficulty-select .panel .ds-divider { margin-bottom: 16px; }
+      #difficulty-select button { padding: 9px 16px; margin: 4px 0; width: 100%; min-width: 0; font-size: 0.85rem; letter-spacing: 0.1em; }
+      #difficulty-select button .btn-hint { font-size: 0.55rem; margin-top: 3px; letter-spacing: 0.06em; }
+      #training-select { overflow-y: auto; padding: 14px 10px; }
+      #training-select .panel { max-height: none; }
+
+      #rotate-overlay { gap: 16px; }
+      #rotate-overlay .rot-phone { width: 52px; height: 84px; }
+    }
+
+    /* 平板橫向：粗指標但螢幕較大，按鈕等比放大（搖桿不動，touchControls 的
+       JOY_RADIUS=52 是寫死的，改外框會讓推滿判定跟視覺對不上） */
+    @media (pointer: coarse) and (min-width: 900px) and (min-height: 600px) {
+      #btn-fire { width: 86px; height: 86px; right: 28px; bottom: 38px; }
+      #btn-jump { width: 70px; height: 70px; right: 132px; bottom: 46px; }
+      #btn-weapon { width: 50px; height: 50px; right: 28px; bottom: 142px; }
+      #btn-menu { width: 46px; height: 46px; top: 64px; left: 20px; }
+      #pm-guide .pg-row { font-size: 0.8rem; }
+      #pause-menu .pm-btn { font-size: 0.95rem; }
+    }
   </style>
 </head>
 <body>
@@ -460,6 +825,17 @@
           <span class="enemy-desc">遠距紅外鎖定 · 雷射瞄準線警示 · 練習快速移動與閃避</span>
         </button>
       </div>
+      <div class="training-boss-label">魔王訓練</div>
+      <div class="training-options boss-options">
+        <button class="training-btn boss-btn" data-enemy="boss1">
+          <span class="enemy-name">壁壘</span>
+          <span class="enemy-desc">防禦矩陣守護者 · 擊敗第 3 層後解鎖</span>
+        </button>
+        <button class="training-btn boss-btn" data-enemy="boss2">
+          <span class="enemy-name">零層核心</span>
+          <span class="enemy-desc">最終訊號源 · 通關後解鎖</span>
+        </button>
+      </div>
     </div>
   </div>
 
@@ -485,6 +861,85 @@
       <div id="dgal-entries"></div>
     </div>
   </div>
+
+  <div id="cinema-bars" aria-hidden="true">
+    <div class="cb cb-top"></div>
+    <div class="cb cb-bottom"></div>
+  </div>
+
+  <div id="rotate-overlay">
+    <div class="rot-phone"></div>
+    <div>請將裝置旋轉為橫向</div>
+    <div class="rot-sub">ROTATE DEVICE</div>
+  </div>
+
+  <div id="touch-controls">
+    <div id="joystick-zone"></div>
+    <div id="aim-zone"></div>
+    <div id="joystick-base"></div>
+    <div id="joystick-thumb"></div>
+    <button id="btn-menu" class="touch-btn" aria-label="選單">
+      <svg class="tb-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+    </button>
+    <button id="btn-weapon" class="touch-btn" aria-label="切換武器">
+      <svg class="tb-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M20.5 11.6a8.5 8.5 0 1 1-2.7-6.2"/><path d="M20.6 4v5.3h-5.3"/></svg>
+    </button>
+    <button id="btn-jump" class="touch-btn" aria-label="跳躍">
+      <svg class="tb-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19.4V6.2"/><path d="M5.7 12.3 12 6l6.3 6.3"/></svg>
+    </button>
+    <button id="btn-fire" class="touch-btn" aria-label="射擊">
+      <svg class="tb-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="12" cy="12" r="7.2"/><path d="M12 1.9v4.6M12 17.5v4.6M1.9 12h4.6M17.5 12h4.6"/><circle cx="12" cy="12" r="1.5" fill="currentColor" stroke="none"/></svg>
+    </button>
+  </div>
+
+  <div id="pause-menu">
+    <div class="pm-panel">
+      <div class="pm-title">暫停</div>
+      <button id="pm-resume" class="pm-btn">繼續遊戲</button>
+      <button id="pm-restart" class="pm-btn">重新開始本層</button>
+      <button id="pm-guide-btn" class="pm-btn">操作指南</button>
+      <button id="pm-quit" class="pm-btn pm-danger">返回主選單</button>
+    </div>
+  </div>
+
+  <button id="hud-guide-btn">操作指南</button>
+
+  <div id="level-transition">
+    <div id="lt-bg"></div>
+    <div id="lt-inner">
+      <div id="lt-floor">LEVEL</div>
+      <div id="lt-name"></div>
+      <div id="lt-rule"></div>
+      <div id="lt-line"></div>
+    </div>
+  </div>
+
+  <div id="pm-guide">
+        <div class="pg-head">操作指南</div>
+        <div class="pg-body">
+          <div class="pg-col" data-mode="touch">
+            <div class="pg-row"><b><svg class="pg-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="16" r="5.2"/><path d="M12 16V8.6"/><circle cx="12" cy="6.6" r="2.2"/></svg>左半螢幕拖曳</b><span>移動（推到底＝衝刺）</span></div>
+            <div class="pg-row"><b><svg class="pg-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 12S6 5.8 12 5.8 21.5 12 21.5 12 18 18.2 12 18.2 2.5 12 2.5 12z"/><circle cx="12" cy="12" r="2.8"/></svg>右半螢幕拖曳</b><span>轉動視角</span></div>
+            <div class="pg-row"><b><svg class="pg-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="12" cy="12" r="7.2"/><path d="M12 1.9v4.6M12 17.5v4.6M1.9 12h4.6M17.5 12h4.6"/><circle cx="12" cy="12" r="1.5" fill="currentColor" stroke="none"/></svg>射擊鍵</b><span>按住持續開火</span></div>
+            <div class="pg-row"><b><svg class="pg-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19.4V6.2"/><path d="M5.7 12.3 12 6l6.3 6.3"/></svg>跳躍鍵</b><span>跳躍</span></div>
+            <div class="pg-row"><b><svg class="pg-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M20.5 11.6a8.5 8.5 0 1 1-2.7-6.2"/><path d="M20.6 4v5.3h-5.3"/></svg>切換武器鍵</b><span>循環切槍</span></div>
+            <div class="pg-row"><b>點彈藥數字</b><span>手動換彈</span></div>
+            <div class="pg-row"><b>清空敵人後點提示</b><span>前往下一層</span></div>
+          </div>
+          <div class="pg-col" data-mode="key">
+            <div class="pg-row"><b>W A S D</b><span>移動</span></div>
+            <div class="pg-row"><b>滑鼠</b><span>轉動視角</span></div>
+            <div class="pg-row"><b>左鍵</b><span>射擊</span></div>
+            <div class="pg-row"><b>右鍵</b><span>衝刺</span></div>
+            <div class="pg-row"><b>Space</b><span>跳躍</span></div>
+            <div class="pg-row"><b>R</b><span>換彈</span></div>
+            <div class="pg-row"><b>1 2 3</b><span>切換武器</span></div>
+            <div class="pg-row"><b>Q</b><span>清空敵人後前往下一層</span></div>
+            <div class="pg-row"><b>H</b><span>操作指南</span></div>
+          </div>
+        </div>
+        <button id="pm-guide-close">收合指南</button>
+      </div>
 
   <script type="module" src="/src/main.js"></script>
 </body>

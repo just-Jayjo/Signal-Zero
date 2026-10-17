@@ -17,6 +17,10 @@ const C = {
   gold: 0xffcc44
 }
 
+const _cBox = new THREE.Box3()
+const _cV1 = new THREE.Vector3()
+const _cV2 = new THREE.Vector3()
+
 export class Level5 {
   constructor(scene, difficulty = 'normal', assets = null) {
     this.scene = scene
@@ -404,6 +408,7 @@ export class Level5 {
       const bulb = new THREE.Mesh(new THREE.SphereGeometry(0.1, 8, 8), bulbMat)
       bulb.position.copy(light.position)
       this.scene.add(bulb)
+      this.decorations.push(bulb)
     }
   }
 
@@ -518,12 +523,11 @@ export class Level5 {
   }
 
   checkCollision(position, radius) {
+    _cV1.set(position.x - radius, position.y - radius, position.z - radius)
+    _cV2.set(position.x + radius, position.y + radius + 1, position.z + radius)
+    _cBox.set(_cV1, _cV2)
     for (const box of this.collisionBoxes) {
-      const test = new THREE.Box3(
-        new THREE.Vector3(position.x - radius, position.y - radius, position.z - radius),
-        new THREE.Vector3(position.x + radius, position.y + radius + 1, position.z + radius)
-      )
-      if (box.intersectsBox(test)) return true
+      if (box.intersectsBox(_cBox)) return true
     }
     return false
   }

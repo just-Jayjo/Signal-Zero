@@ -12,7 +12,7 @@ export function addLoopMethods(Game, LEVEL_CLASSES, NARRATIVE_INTRO) {
     if (document.documentElement.requestFullscreen && !document.fullscreenElement) {
       document.documentElement.requestFullscreen().catch(() => {})
     }
-    this.lockPointer()
+    if (this.difficulty !== 'easy') this.lockPointer()
     this.listen()
     this.kills = 0
     this.shotsFired = 0
@@ -80,6 +80,18 @@ export function addLoopMethods(Game, LEVEL_CLASSES, NARRATIVE_INTRO) {
     }
     this.elapsedTime = (performance.now() - this.startTime) / 1000
 
+    if (this.endingSequence) {
+      this.updateEndingSequence(delta)
+      this.renderer.render(this.scene, this.camera)
+      return
+    }
+
+    if (this._transition) {
+      this._updateLevelTransition(delta)
+      this.renderer.render(this.scene, this.camera)
+      return
+    }
+
     if (this.narrative.isActive() || this.transitioning) {
       this.renderer.render(this.scene, this.camera)
       return
@@ -117,12 +129,24 @@ export function addLoopMethods(Game, LEVEL_CLASSES, NARRATIVE_INTRO) {
           enemy.deathTimer = 0.5
         }
         if (!enemy.deathDone) continue
+        if (enemy.type === 'shieldGuardian' || enemy.type === 'signalCore') {
+          this._lastBossPos = enemy.mesh.position.clone()
+        }
         this.scene.remove(enemy.mesh)
         this.enemies.splice(i, 1)
         this.kills++
         this.hud.addKillFeed(enemy.type)
         if (this.audio) this.audio.playDeath()
       }
+    }
+
+    this._enemyMeshes = new Array(this.enemies.length)
+    for (let i = 0; i < this.enemies.length; i++) {
+      this._enemyMeshes[i] = this.enemies[i].mesh
+    }
+
+    if (this.touchFiring) {
+      this.weaponManager.shoot(this.enemies, this.camera, this.level, this._enemyMeshes)
     }
 
     if (this.trainingMode && this.enemies.length === 0 && this.trainingEnemy && this.trainingEnemy !== 'targetDummy') {
@@ -136,8 +160,11 @@ export function addLoopMethods(Game, LEVEL_CLASSES, NARRATIVE_INTRO) {
       } else {
         const pct = (boss.hp / boss.maxHp) * 100
         const label = boss.type === 'shieldGuardian' ? '<span class="ico ico-diamond"></span> 封鎖單位' : '<span class="ico ico-diamond"></span> 訊號核心'
-        const labelEl = document.querySelector('#boss-health-container .boss-label')
-        if (labelEl) labelEl.innerHTML = label
+        if (label !== this._bossLabel) {
+          this._bossLabel = label
+          const labelEl = document.querySelector('#boss-health-container .boss-label')
+          if (labelEl) labelEl.innerHTML = label
+        }
         this.updateBossHealthBar(pct)
       }
     } else {
@@ -170,7 +197,10 @@ export function addLoopMethods(Game, LEVEL_CLASSES, NARRATIVE_INTRO) {
       this.weaponManager.currentWeapon.setBobPhase(this.player.weaponBob)
     }
 
-    this.hud.update(this.player, this.weaponManager.currentWeapon, this.kills, this.elapsedTime, this.totalEnemies, this.enemies.length, this.devMode ? this._realHealth : null)
+    const waveTotal = (this.waveSystem.waves.length > 0 && this.waveSystem.currentWaveTotal > 0)
+      ? this.waveSystem.currentWaveTotal
+      : this.totalEnemies
+    this.hud.update(this.player, this.weaponManager.currentWeapon, this.kills, this.elapsedTime, Math.max(waveTotal, this.enemies.length), this.enemies.length, this.devMode ? this._realHealth : null)
 
     for (let i = this.datalogPickups.length - 1; i >= 0; i--) {
       this.datalogPickups[i].update(delta, this.camera.position)
@@ -199,10 +229,6 @@ export function addLoopMethods(Game, LEVEL_CLASSES, NARRATIVE_INTRO) {
       } else {
         this.hud.showLevelAdvanceHint(true)
       }
-    }
-
-    if (this.endingSequence) {
-      this.updateEndingSequence(delta)
     }
 
     this.renderer.render(this.scene, this.camera)
@@ -240,12 +266,17 @@ export function addLoopMethods(Game, LEVEL_CLASSES, NARRATIVE_INTRO) {
     }
     if (this._endingClickHandler) {
       document.removeEventListener('mousedown', this._endingClickHandler)
+      document.removeEventListener('touchend', this._endingClickHandler)
       this._endingClickHandler = null
     }
     if (this._endingOverlay) {
       this._endingOverlay.remove()
       this._endingOverlay = null
     }
+    document.body.classList.remove('ending-cinema')
+    document.body.classList.remove('ui-paused')
+    const pm = document.getElementById('pause-menu')
+    if (pm) pm.style.display = 'none'
 
     for (const enemy of this.enemies) {
       this.scene.remove(enemy.mesh)
@@ -259,6 +290,7 @@ export function addLoopMethods(Game, LEVEL_CLASSES, NARRATIVE_INTRO) {
     this.player.reset()
 
     document.getElementById('results-screen').style.display = 'none'
+    document.getElementById('training-select').style.display = 'none'
     document.getElementById('blocker').style.display = 'flex'
     this.kills = 0
     this.shotsFired = 0
@@ -268,7 +300,10 @@ export function addLoopMethods(Game, LEVEL_CLASSES, NARRATIVE_INTRO) {
     this._retryLevel = 0
     this.transitioning = false
     this.paused = false
+    this.touchFiring = false
+    if (this._touchReset) this._touchReset()
     this.devMode = false
+    if (this.hud) this.hud.showDevMode(false)
     this.endingSequence = false
     this.trainingMode = false
     this.trainingEnemy = null

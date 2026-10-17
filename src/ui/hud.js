@@ -17,42 +17,66 @@ export class HUD {
   }
 
   update(player, weapon, kills, elapsed, totalEnemies, remainingEnemies, realHealth) {
+    /* 數值沒變就不寫 DOM — 這一頁原本每幀都在重建 innerHTML / 改 style */
     if (this.healthFill) {
-      const pct = Math.max(0, player.health / player.maxHealth * 100)
-      this.healthFill.style.width = pct + '%'
-      this.healthFill.className = pct > 60 ? 'safe' : pct > 30 ? 'caution' : 'danger'
+      const pct = Math.max(0, Math.round(player.health / player.maxHealth * 100))
+      if (pct !== this._hpPct) {
+        this._hpPct = pct
+        this.healthFill.style.width = pct + '%'
+        this.healthFill.className = pct > 60 ? 'safe' : pct > 30 ? 'caution' : 'danger'
+      }
     }
     if (this.healthNum) {
-      this.healthNum.textContent = Math.ceil(player.health)
+      const v = Math.ceil(player.health)
+      if (v !== this._hpNum) { this._hpNum = v; this.healthNum.textContent = v }
     }
     if (realHealth != null && this.realHealthBar) {
-      this.realHealthBar.style.display = 'block'
-      const realPct = Math.max(0, realHealth / player.maxHealth * 100)
-      if (this.realFill) {
-        this.realFill.style.width = realPct + '%'
-        this.realFill.className = realPct > 60 ? 'safe' : realPct > 30 ? 'caution' : 'danger'
+      if (!this._realShown) { this._realShown = true; this.realHealthBar.style.display = 'block' }
+      const rp = Math.max(0, Math.round(realHealth / player.maxHealth * 100))
+      if (rp !== this._realPct) {
+        this._realPct = rp
+        if (this.realFill) {
+          this.realFill.style.width = rp + '%'
+          this.realFill.className = rp > 60 ? 'safe' : rp > 30 ? 'caution' : 'danger'
+        }
       }
-      if (this.realHealthNum) this.realHealthNum.textContent = Math.ceil(realHealth)
+      if (this.realHealthNum) {
+        const v = Math.ceil(realHealth)
+        if (v !== this._realNum) { this._realNum = v; this.realHealthNum.textContent = v }
+      }
     } else if (this.realHealthBar) {
-      this.realHealthBar.style.display = 'none'
+      if (this._realShown !== false) { this._realShown = false; this.realHealthBar.style.display = 'none' }
     }
 
     if (this.ammoDisplay && weapon) {
-      this.ammoDisplay.innerHTML = `${weapon.currentAmmo} <span class="reserve">/ ${weapon.reserveAmmo}</span>`
-      this.ammoDisplay.style.color = weapon.currentAmmo <= 0 ? '#ff3e3e' : '#fff'
+      const key = weapon.currentAmmo + '/' + weapon.reserveAmmo
+      if (key !== this._ammoKey) {
+        this._ammoKey = key
+        this.ammoDisplay.innerHTML = `${weapon.currentAmmo} <span class="reserve">/ ${weapon.reserveAmmo}</span>`
+        this.ammoDisplay.style.color = weapon.currentAmmo <= 0 ? '#ff3e3e' : '#fff'
+      }
     }
 
-    if (this.weaponName && weapon) {
+    if (this.weaponName && weapon && weapon.name !== this._weaponKey) {
+      this._weaponKey = weapon.name
       this.weaponName.innerHTML = `<span class="ico ico-arrow"></span> ${weapon.name}`
     }
 
     if (this.enemyCount) {
-      this.enemyCount.textContent = `${remainingEnemies} / ${totalEnemies}`
-      this.enemyCount.style.color = remainingEnemies <= 0 ? 'rgba(0,242,255,0.4)' : '#fff'
+      const key = remainingEnemies + '/' + totalEnemies
+      if (key !== this._enemyKey) {
+        this._enemyKey = key
+        this.enemyCount.textContent = key
+        this.enemyCount.style.color = remainingEnemies <= 0 ? 'rgba(0,242,255,0.4)' : '#fff'
+      }
     }
 
     if (this.reloadIndicator && weapon) {
-      this.reloadIndicator.style.display = weapon.isReloading ? 'block' : 'none'
+      const want = weapon.isReloading ? 'block' : 'none'
+      if (this._reloadShown !== weapon.isReloading) {
+        this._reloadShown = weapon.isReloading
+        this.reloadIndicator.style.display = want
+      }
     }
   }
 
@@ -72,8 +96,16 @@ export class HUD {
   }
 
   showLevelAdvanceHint(show) {
+    if (this._hintShown === show) return
+    this._hintShown = show
     const hint = document.getElementById('level-hint')
-    if (hint) hint.style.display = show ? 'block' : 'none'
+    if (!hint) return
+    if (show) {
+      hint.textContent = document.body.classList.contains('touch-mode')
+        ? '點擊這裡前往下一層'
+        : '按 Q 前往下一層'
+    }
+    hint.style.display = show ? 'block' : 'none'
   }
 
   showDevMode(active) {

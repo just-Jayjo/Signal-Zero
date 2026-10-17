@@ -93,13 +93,18 @@ export function addCombatMethods(Game) {
   }
 
   Game.prototype.showBossHealthBar = function(show) {
-    const container = document.getElementById('boss-health-container')
-    if (container) container.style.display = show ? 'flex' : 'none'
+    if (this._bossBarShown === show) return
+    this._bossBarShown = show
+    if (!this._bossBarEl) this._bossBarEl = document.getElementById('boss-health-container')
+    if (this._bossBarEl) this._bossBarEl.style.display = show ? 'flex' : 'none'
   }
 
   Game.prototype.updateBossHealthBar = function(pct) {
-    const fill = document.getElementById('boss-health-fill')
-    if (fill) fill.style.width = Math.max(0, Math.min(100, pct)) + '%'
+    const v = Math.max(0, Math.min(100, Math.round(pct)))
+    if (this._bossBarPct === v) return
+    this._bossBarPct = v
+    if (!this._bossBarFill) this._bossBarFill = document.getElementById('boss-health-fill')
+    if (this._bossBarFill) this._bossBarFill.style.width = v + '%'
   }
 
   Game.prototype.showDatalogPopup = function(id, name, text) {
@@ -409,7 +414,7 @@ export function addCombatMethods(Game) {
     if (this.narrative.isActive() || this.transitioning) return
     if (e.target && e.target.closest && e.target.closest('button')) return
     if (e.button === 0 && document.pointerLockElement === this.renderer.domElement) {
-      this.weaponManager.shoot(this.enemies, this.camera, this.level)
+      this.weaponManager.shoot(this.enemies, this.camera, this.level, this._enemyMeshes)
     }
   }
 

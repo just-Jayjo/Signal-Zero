@@ -21,8 +21,8 @@ class WeaponBase {
     this.spread = 0.02
     this.auto = false
     this.lastTarget = null
-    this.recoilAmount = 0.02
-    this.recoilVisualKick = 0.03
+    this.recoilAmount = 0.032
+    this.recoilVisualKick = 0.05
     this._recoilKick = 0
     this._recoilRotKick = 0
   }
@@ -195,7 +195,7 @@ class WeaponBase {
     }
   }
 
-  shoot(enemies, camera, level) {
+  shoot(enemies, camera, level, enemyMeshes) {
     if (this.isReloading) return null
     if (this.currentAmmo <= 0) {
       if (this.reserveAmmo > 0) this.reload()
@@ -220,10 +220,7 @@ class WeaponBase {
     dir.add(spread).normalize()
 
     const raycaster = new THREE.Raycaster(camera.position, dir, 0, this.range)
-    const allMeshes = []
-    for (const enemy of enemies) {
-      if (enemy.mesh && enemy.mesh.visible) allMeshes.push(enemy.mesh)
-    }
+    const allMeshes = enemyMeshes || enemies.map(e => e.mesh).filter(m => m && m.visible)
     /* 牆壁碰撞 — 子彈不能穿牆 */
     let wallDist = Infinity
     if (level && level.walls) {
@@ -369,8 +366,8 @@ class PulsePistol extends WeaponBase {
     this.name = '脈衝手槍'
     this.damage = 13
     this.fireRate = 0.15
-    this.recoilAmount = 0.05
-    this.recoilVisualKick = 0.07
+    this.recoilAmount = 0.078
+    this.recoilVisualKick = 0.108
     this.magazineSize = 20
     this.currentAmmo = 20
     this.reserveAmmo = 60
@@ -476,8 +473,8 @@ class BurstRifle extends WeaponBase {
     this.name = '連發步槍'
     this.damage = 8
     this.fireRate = 0.45
-    this.recoilAmount = 0.04
-    this.recoilVisualKick = 0.06
+    this.recoilAmount = 0.062
+    this.recoilVisualKick = 0.092
     this.magazineSize = 25
     this.currentAmmo = 25
     this.reserveAmmo = 75
@@ -612,7 +609,7 @@ class BurstRifle extends WeaponBase {
     this.scene.add(group)
   }
 
-  shoot(enemies, camera, level) {
+  shoot(enemies, camera, level, enemyMeshes) {
     if (this.isReloading) return null
     if (this.currentAmmo <= 0) {
       if (this.reserveAmmo > 0) this.reload()
@@ -626,6 +623,7 @@ class BurstRifle extends WeaponBase {
     this._burstEnemies = enemies
     this._burstCamera = camera
     this._burstLevel = level
+    this._burstEnemyMeshes = enemyMeshes
 
     this.fireBurst()
     return true
@@ -650,10 +648,7 @@ class BurstRifle extends WeaponBase {
     dir.add(spread).normalize()
 
     const raycaster = new THREE.Raycaster(this._burstCamera.position, dir, 0, this.range)
-    const allMeshes = []
-    for (const enemy of this._burstEnemies) {
-      if (enemy.mesh && enemy.mesh.visible) allMeshes.push(enemy.mesh)
-    }
+    const allMeshes = this._burstEnemyMeshes || this._burstEnemies.map(e => e.mesh).filter(m => m && m.visible)
     let wallDist = Infinity
     if (this._burstLevel && this._burstLevel.walls) {
       const wallHits = raycaster.intersectObjects(this._burstLevel.walls, true)
@@ -715,13 +710,22 @@ class Grenade extends WeaponBase {
     this.throwStrength = 8
     this.projectiles = []
     this.player = null
+    this._throwT = 0
+    this._throwReleased = false
     this.createMesh()
   }
 
   setPlayer(player) { this.player = player }
 
+  reset() {
+    super.reset()
+    this._throwT = 0
+    this._throwReleased = false
+  }
+
   createMesh() {
     const group = new THREE.Group()
+    const visual = new THREE.Group()
     const bodyMat = new THREE.MeshStandardMaterial({ color: 0x3a4a5a, metalness: 0.8, roughness: 0.2 })
     const darkMat = new THREE.MeshStandardMaterial({ color: 0x1a2a3a, metalness: 0.7, roughness: 0.3 })
     const glowMat = new THREE.MeshStandardMaterial({ color: 0x00ffcc, emissive: 0x00ffaa, emissiveIntensity: 1.5 })
@@ -729,21 +733,21 @@ class Grenade extends WeaponBase {
     /* 主體 — 光滑橢球 */
     const body = new THREE.Mesh(new THREE.SphereGeometry(0.04, 12, 12), bodyMat)
     body.scale.y = 1.3
-    group.add(body)
+    visual.add(body)
 
     /* 赤道發光環 */
     const glowRing = new THREE.Mesh(new THREE.TorusGeometry(0.042, 0.005, 8, 16), glowMat)
     glowRing.rotation.x = Math.PI / 2
-    group.add(glowRing)
+    visual.add(glowRing)
 
     /* 頂端感應引信（小半球＋發光尖端） */
     const tip = new THREE.Mesh(new THREE.SphereGeometry(0.015, 8, 8), darkMat)
     tip.position.y = 0.058
     tip.scale.y = 0.5
-    group.add(tip)
+    visual.add(tip)
     const tipGlow = new THREE.Mesh(new THREE.SphereGeometry(0.006, 6, 6), glowMat)
     tipGlow.position.y = 0.07
-    group.add(tipGlow)
+    visual.add(tipGlow)
 
     /* 尾翼 × 4 */
     for (let i = 0; i < 4; i++) {
@@ -751,16 +755,20 @@ class Grenade extends WeaponBase {
       const fin = new THREE.Mesh(new THREE.BoxGeometry(0.003, 0.03, 0.02), darkMat)
       fin.position.set(Math.cos(angle) * 0.05, -0.045, Math.sin(angle) * 0.05)
       fin.rotation.y = -angle
-      group.add(fin)
+      visual.add(fin)
     }
 
     /* 尾部噴口 */
     const nozzle = new THREE.Mesh(new THREE.CylinderGeometry(0.015, 0.025, 0.01, 8), darkMat)
     nozzle.position.y = -0.055
-    group.add(nozzle)
+    visual.add(nozzle)
     const nozzleGlow = new THREE.Mesh(new THREE.CylinderGeometry(0.01, 0.005, 0.008, 6), glowMat)
     nozzleGlow.position.y = -0.065
-    group.add(nozzleGlow)
+    visual.add(nozzleGlow)
+
+    /* 手榴彈本體單獨一層：丟出去時 clone 它，手上這顆就能同步消失 */
+    this._nadeGroup = visual
+    group.add(visual)
 
     this._createHand(group, new THREE.Vector3(0, -0.02, 0.04))
 
@@ -786,39 +794,110 @@ class Grenade extends WeaponBase {
 
     this.fireTimer = this.fireRate
     this.currentAmmo--
+    this._throwEnemies = enemies
 
-    const dir = camera.getWorldDirection(new THREE.Vector3())
-    const spawnPos = camera.position.clone().add(dir.clone().multiplyScalar(0.5))
+    /* 先起手，實際丟出在 _updateThrow 裡到點才丟 */
+    this._throwT = 0.0001
+    this._throwReleased = false
+
+    return true
+  }
+
+  /* 起手 45% 往後拉，之後往前甩並歸位；release 發生在甩出途中 */
+  _updateThrow(delta) {
+    const T = 0.30
+    const RELEASE = 0.45
+    if (this._throwT > 0 && this._throwT < 1) {
+      this._throwT = Math.min(1, this._throwT + delta / T)
+      if (!this._throwReleased && this._throwT >= RELEASE) this._releaseGrenade()
+    }
+    if (this._nadeGroup) {
+      this._nadeGroup.visible = !(this._throwT >= RELEASE && this._throwT < 1) && this.currentAmmo > 0
+    }
+  }
+
+  _releaseGrenade() {
+    this._throwReleased = true
+    const enemies = this._throwEnemies || []
+    const dir = this.camera.getWorldDirection(new THREE.Vector3())
+    const spawnPos = this.camera.position.clone().add(dir.clone().multiplyScalar(0.5))
     spawnPos.y -= 0.1
 
     const vel = dir.clone().multiplyScalar(this.throwStrength)
     vel.y += 3
 
-    const proj = {
-      mesh: new THREE.Mesh(new THREE.SphereGeometry(0.04, 6, 6),
-        new THREE.MeshStandardMaterial({ color: 0x4a5a3a, metalness: 0.3, roughness: 0.8 })),
-      pos: spawnPos.clone(),
-      vel: vel,
-      life: 3.0,
-      enemies: enemies,
-      exploded: false
+    /* 飛出去的就是手上那一顆的複本（clone 共用 geometry/material，所以爆炸時不能 dispose） */
+    const mesh = this._nadeGroup ? this._nadeGroup.clone(true) : new THREE.Mesh(
+      new THREE.SphereGeometry(0.04, 6, 6),
+      new THREE.MeshStandardMaterial({ color: 0x4a5a3a, metalness: 0.3, roughness: 0.8 })
+    )
+    mesh.scale.copy(this.mesh.scale)
+    this.mesh.updateWorldMatrix(true, false)
+    if (this._nadeGroup) {
+      this._nadeGroup.getWorldPosition(spawnPos)
+      this._nadeGroup.getWorldQuaternion(mesh.quaternion)
     }
-    proj.mesh.position.copy(spawnPos)
-    this.scene.add(proj.mesh)
-    this.projectiles.push(proj)
+    mesh.position.copy(spawnPos)
 
-    return true
+    const proj = {
+      mesh,
+      pos: spawnPos.clone(),
+      vel,
+      life: 3.0,
+      enemies,
+      exploded: false,
+      spin: new THREE.Vector3(6, 11, 4)
+    }
+    this.scene.add(mesh)
+    this.projectiles.push(proj)
+  }
+
+  /* 在 base 的變換完成後疊加揮臂偏移，再把前臂同步回去 */
+  _updateWeaponTransform() {
+    super._updateWeaponTransform()
+    const t = this._throwT
+    if (!(t > 0 && t < 1)) return
+
+    const T_WIND = 0.45
+    let wx = 0, wy = 0, wz = 0, rx = 0, ry = 0
+    if (t < T_WIND) {
+      const p = t / T_WIND
+      const e = p * p * (3 - 2 * p)
+      wx = 0.05 * e; wy = -0.11 * e; wz = 0.14 * e
+      rx = -0.85 * e; ry = 0.45 * e
+    } else {
+      const q = (t - T_WIND) / (1 - T_WIND)
+      const e = q * q * (3 - 2 * q)
+      const s = Math.sin(q * Math.PI)
+      wx = 0.05 * (1 - e)
+      wy = -0.11 * (1 - e) + 0.06 * s
+      wz = 0.14 * (1 - e) - 0.30 * s
+      rx = -0.85 * (1 - e) + 1.5 * s
+      ry = 0.45 * (1 - e) - 0.30 * s
+    }
+
+    this.mesh.rotateX(rx)
+    this.mesh.rotateY(ry)
+    this.mesh.translateX(wx)
+    this.mesh.translateY(wy)
+    this.mesh.translateZ(wz)
+
+    if (this._forearmGroup && this._gripPos) {
+      const gripWorld = this._gripPos.clone().applyQuaternion(this.mesh.quaternion)
+      gripWorld.add(this.mesh.position)
+      this._forearmGroup.position.copy(gripWorld)
+      this._forearmGroup.scale.copy(this.mesh.scale)
+    }
   }
 
   update(delta) {
     super.update(delta)
+    this._updateThrow(delta)
     for (let i = this.projectiles.length - 1; i >= 0; i--) {
       const p = this.projectiles[i]
 
       if (p.exploded) {
         this.scene.remove(p.mesh)
-        p.mesh.geometry.dispose()
-        p.mesh.material.dispose()
         this.projectiles.splice(i, 1)
         continue
       }
@@ -827,6 +906,11 @@ class Grenade extends WeaponBase {
       p.pos.add(p.vel.clone().multiplyScalar(delta))
       if (p.pos.y < 0.1) p.pos.y = 0.1
       p.mesh.position.copy(p.pos)
+      if (p.spin) {
+        p.mesh.rotation.x += p.spin.x * delta
+        p.mesh.rotation.y += p.spin.y * delta
+        p.mesh.rotation.z += p.spin.z * delta
+      }
       p.life -= delta
 
       if (p.pos.y <= 0.1 || p.life <= 0) {
@@ -1007,12 +1091,20 @@ export class WeaponManager {
   }
 
   update(delta) {
-    if (this.currentWeapon) this.currentWeapon.update(delta)
+    for (const w of this.weapons) {
+      if (w === this.currentWeapon) {
+        w.update(delta)
+        continue
+      }
+      /* 換槍後另一把的彈道／火花原永遠等不到 update，這裡只做回收 */
+      if (w._trails && w._trails.length && w.updateTrails) w.updateTrails()
+      if (w._sparks && w._sparks.length && w._updateSparks) w._updateSparks(delta)
+    }
   }
 
-  shoot(enemies, camera, level) {
+  shoot(enemies, camera, level, enemyMeshes) {
     if (!this.currentWeapon) return
-    const hit = this.currentWeapon.shoot(enemies, camera, level)
+    const hit = this.currentWeapon.shoot(enemies, camera, level, enemyMeshes)
     if (this.onShoot) this.onShoot(hit)
   }
 

@@ -7,8 +7,8 @@ export class SignalCore {
   constructor(position) {
     this.type = 'signalCore'
     this.mesh = null
-    this.hp = 2000
-    this.maxHp = 2000
+    this.hp = 1750
+    this.maxHp = 1750
     this.dead = false
     this.deathDone = false
     this.deathTimer = 4.0
@@ -32,14 +32,15 @@ export class SignalCore {
     this._laserAngle = 0
 
     this.shootTimer = 2.5
-    this.orbitalTimer = 99.0
-    this.pulseTimer = 99.0
-    this.summonTimer = 99.0
-    this.vortexTimer = 99.0
-    this.missileTimer = 99.0
-    this.laserTimer = 99.0
+    this.orbitalTimer = 6.0
+    this.pulseTimer = 4.0
+    this.summonTimer = 9.0
+    this.vortexTimer = 9.0
+    this.missileTimer = 11.0
+    this.laserTimer = 7.0
     this.trackTimer = 0
     this._lastSfxTime = 0
+    this._timers = new Set()
 
     this.createMesh(position)
   }
@@ -170,9 +171,9 @@ export class SignalCore {
 
     this._fireNova(12)
 
-    setTimeout(() => {
+    this._addTimer(setTimeout(() => {
       this.phaseTransitioning = false
-    }, 1500)
+    }, 1500))
   }
 
   update(delta, player, level) {
@@ -228,7 +229,7 @@ export class SignalCore {
     this.shootTimer -= delta
     if (this.shootTimer <= 0 && dist < 40) {
       this._fireAimedShot()
-      const cooldowns = [1.5, 1.8, 2.0]
+      const cooldowns = [1.8, 2.1, 2.4]
       this.shootTimer = cooldowns[Math.min(this.phase - 1, cooldowns.length - 1)]
     }
 
@@ -238,6 +239,12 @@ export class SignalCore {
       this.trackTimer = this.phase === 1 ? 4.5 : (this.phase === 2 ? 4.0 : 3.5)
     }
 
+    this.pulseTimer -= delta
+    if (this.pulseTimer <= 0 && dist < 40) {
+      this._firePulseWave()
+      this.pulseTimer = this.phase === 1 ? 11.0 : (this.phase === 2 ? 9.0 : 7.0)
+    }
+
     if (this.phase >= 2) {
       this.orbitalTimer -= delta
       if (this.orbitalTimer <= 0 && dist < 40) {
@@ -245,16 +252,10 @@ export class SignalCore {
         this.orbitalTimer = this.phase === 2 ? 9.0 : 7.0
       }
 
-      this.pulseTimer -= delta
-      if (this.pulseTimer <= 0 && dist < 40) {
-        this._firePulseWave()
-        this.pulseTimer = this.phase === 2 ? 10.0 : 8.0
-      }
-
       this.summonTimer -= delta
       if (this.summonTimer <= 0) {
         this._summonMinions()
-        this.summonTimer = 18.0
+        this.summonTimer = 14.0
       }
 
       this.missileTimer -= delta
@@ -279,7 +280,7 @@ export class SignalCore {
       }
 
       if (!this._laserActive && dist < 6) {
-        player.takeDamage(4 * delta)
+        player.takeDamage(3 * delta)
       }
     }
 
@@ -417,10 +418,10 @@ export class SignalCore {
     scene.add(exp)
 
     let t = 0
-    const iv = setInterval(() => {
+    const iv = this._addTimer(setInterval(() => {
       t += 0.016
       if (t >= 0.6) {
-        clearInterval(iv)
+        this._clearTimer(iv)
         exp.parent?.remove(exp)
         exp.geometry.dispose()
         exp.material.dispose()
@@ -428,11 +429,11 @@ export class SignalCore {
       }
       exp.scale.setScalar(1 + t * 12)
       exp.material.opacity = 0.6 * (1 - t / 0.6)
-    }, 16)
+    }, 16))
 
     const dist = this.mesh.position.distanceTo(player.camera.position)
     if (dist < 8 && this._game && this._game.player) {
-      this._game.player.takeDamage(15)
+      this._game.player.takeDamage(12)
       if (this._game.hud) this._game.hud.showDamage()
     }
   }
@@ -444,19 +445,19 @@ export class SignalCore {
     const dir = new THREE.Vector3().subVectors(this._playerPos, origin).normalize()
 
     const counts = [2, 3, 3]
-    const damages = [4, 5, 7]
+    const damages = [3, 4, 6]
     const colors = [0xff4488, 0xff2266, 0xff0000]
     const spreadAmount = [0.25, 0.35, 0.45]
     const count = counts[Math.min(this.phase - 1, counts.length - 1)]
 
     for (let i = 0; i < count; i++) {
-      setTimeout(() => {
+      this._addTimer(setTimeout(() => {
         const s = new THREE.Vector3().subVectors(this._playerPos, origin).normalize()
         s.x += (Math.random() - 0.5) * spreadAmount[this.phase - 1]
         s.z += (Math.random() - 0.5) * spreadAmount[this.phase - 1]
         s.normalize()
         this._fireProjectile(origin, s, colors[this.phase - 1], damages[this.phase - 1])
-      }, i * 150)
+      }, i * 150))
     }
   }
 
@@ -467,7 +468,7 @@ export class SignalCore {
     origin.y += 0.5
     const count = 2 + this.phase
     const color = 0x00ffff
-    const damage = 3 + this.phase
+    const damage = 2 + this.phase
     const spread = 1.2
 
     for (let i = 0; i < count; i++) {
@@ -498,17 +499,17 @@ export class SignalCore {
     const origin = this.mesh.position.clone()
     origin.y += 0.5
     const countPerRing = 6 + this.phase * 2
-    const damage = 3 + this.phase * 1
+    const damage = 2 + this.phase * 1
     const color = this.phase === 2 ? 0xff6688 : 0xff4444
 
     for (let ri = 0; ri < this._orbitalRings.length; ri++) {
-      setTimeout(() => {
+      this._addTimer(setTimeout(() => {
         for (let i = 0; i < countPerRing; i++) {
           const angle = (i / countPerRing) * Math.PI * 2 + Math.random() * 0.1
           const dir = new THREE.Vector3(Math.cos(angle), 0, Math.sin(angle))
           this._fireProjectile(origin, dir, color, damage)
         }
-      }, ri * 100)
+      }, ri * 100))
     }
   }
 
@@ -531,7 +532,7 @@ export class SignalCore {
     this._shockwaves.push({
       mesh, baseRadius: 0.5, radius: 0.5,
       speed: 4 + this.phase * 1.0, life: 2.0, maxLife: 2.0,
-      damage: 4 + this.phase * 2, hasHit: false
+      damage: 3 + this.phase * 2, hasHit: false
     })
   }
 
@@ -541,7 +542,7 @@ export class SignalCore {
     origin.y += 0.5
     const count = 3
     for (let i = 0; i < count; i++) {
-      setTimeout(() => {
+      this._addTimer(setTimeout(() => {
         const angle = (i / count) * Math.PI * 2 + Math.random() * 0.3
         const spread = 5 + Math.random() * 8
         const target = new THREE.Vector3(
@@ -555,8 +556,8 @@ export class SignalCore {
         mesh.position.copy(origin)
         this.mesh.parent?.add(mesh)
         const speed = 5 + Math.random() * 2
-        this._projectiles.push({ mesh, dir, speed, lifetime: 3.0, damage: 10, color: 0xff8800 })
-      }, i * 200)
+        this._projectiles.push({ mesh, dir, speed, lifetime: 3.0, damage: 8, color: 0xff8800 })
+      }, i * 200))
     }
   }
 
@@ -581,10 +582,10 @@ export class SignalCore {
     this._laserWarn = warn
 
     let t = 0
-    const iv = setInterval(() => {
+    const iv = this._addTimer(setInterval(() => {
       t += 0.016
       if (t >= 0.8 || !this._laserActive) {
-        clearInterval(iv)
+        this._clearTimer(iv)
         warn.parent?.remove(warn)
         warn.geometry.dispose()
         warn.material.dispose()
@@ -595,7 +596,7 @@ export class SignalCore {
         return
       }
       warn.material.opacity = 0.1 * (Math.sin(t * 20) * 0.5 + 0.5)
-    }, 16)
+    }, 16))
   }
 
   _fireLaserBeam(player) {
@@ -616,30 +617,30 @@ export class SignalCore {
 
     const dist = this.mesh.position.distanceTo(player.camera.position)
     if (dist < 16) {
-      player.takeDamage(14)
+      player.takeDamage(11)
     }
 
     let t = 0
-    const iv = setInterval(() => {
+    const iv = this._addTimer(setInterval(() => {
       t += 0.016
       this._laserAngle += t * 0.5
       beam.rotation.z = Math.sin(this._laserAngle) * 0.3
       if (t >= 1.5) {
-        clearInterval(iv)
+        this._clearTimer(iv)
         beam.parent?.remove(beam)
         beam.geometry.dispose()
         beam.material.dispose()
         this._laserBeam = null
         this._laserActive = false
       }
-    }, 16)
+    }, 16))
   }
 
   _updateLaserSweep(delta, player) {
     if (!this._laserBeam) return
     const dist = this.mesh.position.distanceTo(player.camera.position)
     if (dist < 16) {
-      player.takeDamage(6 * delta)
+      player.takeDamage(4.5 * delta)
     }
   }
 
@@ -704,10 +705,10 @@ export class SignalCore {
     scene.add(warn)
 
     let t = 0
-    const iv = setInterval(() => {
+    const iv = this._addTimer(setInterval(() => {
       t += 0.016
       if (t >= 2.0 || this._vortexTimer <= 0) {
-        clearInterval(iv)
+        this._clearTimer(iv)
         warn.parent?.remove(warn)
         warn.geometry.dispose()
         warn.material.dispose()
@@ -715,7 +716,7 @@ export class SignalCore {
       }
       warn.material.opacity = 0.15 * (1 + Math.sin(t * 8) * 0.5)
       warn.scale.setScalar(1 + t * 0.1)
-    }, 16)
+    }, 16))
   }
 
   /* Attack 6: Nova burst (phase transition) */
@@ -732,7 +733,7 @@ export class SignalCore {
         pitch,
         Math.sin(angle)
       ).normalize()
-      this._fireProjectile(origin, dir, color, 5)
+      this._fireProjectile(origin, dir, color, 4)
     }
   }
 
@@ -760,10 +761,10 @@ export class SignalCore {
     exp.position.copy(p.mesh.position)
     scene.add(exp)
     let t = 0
-    const iv = setInterval(() => {
+    const iv = this._addTimer(setInterval(() => {
       t += 0.016
       if (t >= 0.3) {
-        clearInterval(iv)
+        this._clearTimer(iv)
         exp.parent?.remove(exp)
         exp.geometry.dispose()
         exp.material.dispose()
@@ -771,7 +772,7 @@ export class SignalCore {
       }
       exp.scale.setScalar(1 + t * 8)
       exp.material.opacity = 1 - t / 0.3
-    }, 16)
+    }, 16))
   }
 
   _removeProjectile(idx) {
@@ -804,6 +805,9 @@ export class SignalCore {
     this._shockwaves = []
   }
 
+  _addTimer(id) { if (this._timers) this._timers.add(id); return id }
+  _clearTimer(id) { clearInterval(id); clearTimeout(id); if (this._timers) this._timers.delete(id) }
+
   die() {
     this.dead = true
     this.deathTimer = 4.0
@@ -826,5 +830,7 @@ export class SignalCore {
         }
       })
     }
+    for (const id of this._timers) clearInterval(id)
+    this._timers.clear()
   }
 }

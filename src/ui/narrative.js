@@ -10,15 +10,18 @@ export class NarrativeScreen {
     this._done = false
     this._typingTimer = null
     this._promptTimer = null
+    this._dim = 0.88
+    this._lastTap = 0
   }
 
-  show(pages, onComplete) {
+  show(pages, onComplete, opts) {
     if (this._active) return
     this._active = true
     this._done = false
     this._pages = pages
     this._pageIdx = 0
     this._onComplete = onComplete || null
+    this._dim = (opts && opts.dim != null) ? opts.dim : 0.88
     this._buildOverlay()
     this._showPage(0)
   }
@@ -40,22 +43,32 @@ export class NarrativeScreen {
       <div class="narrative-text" style="
         max-width:600px; text-align:center;
         font-size:1.1rem; line-height:1.8;
-        color:rgba(255,255,255,0.7);
-        text-shadow: 0 0 20px rgba(0,242,255,0.15);
+        color:rgba(255,255,255,0.78);
+        text-shadow: 0 0 20px rgba(0,242,255,0.2);
         letter-spacing: 0.05em;
         min-height: 3.6em;
+        background: rgba(0,8,16,0.55);
+        border: 1px solid rgba(0,242,255,0.1);
+        padding: 24px 28px;
+        box-shadow: 0 0 40px rgba(0,0,0,0.5);
       "></div>
       <div class="narrative-prompt" style="
         opacity:0; transition: opacity 0.8s ease;
         margin-top:40px; font-size:0.85rem;
         color:rgba(0,242,255,0.4);
         letter-spacing:0.3em;
-      "><span style="display:inline-block;width:0;height:0;border-left:5px solid transparent;border-right:5px solid transparent;border-top:7px solid rgba(0,242,255,0.4);margin-right:6px;vertical-align:middle"></span> 按任意鍵繼續</div>
+      "      ><span style="display:inline-block;width:0;height:0;border-left:5px solid transparent;border-right:5px solid transparent;border-top:7px solid rgba(0,242,255,0.4);margin-right:6px;vertical-align:middle"></span> <b id="narr-prompt-label">按任意鍵繼續</b></div>
     `
     document.body.appendChild(overlay)
     this._overlay = overlay
     this._textEl = overlay.querySelector('.narrative-text')
     this._promptEl = overlay.querySelector('.narrative-prompt')
+    const promptLabel = overlay.querySelector('#narr-prompt-label')
+    if (promptLabel) {
+      promptLabel.textContent = document.body.classList.contains('touch-mode')
+        ? '點擊畫面繼續'
+        : '按任意鍵繼續'
+    }
 
     this._keyHandler = (e) => {
       if (e.code === 'Escape') return
@@ -66,7 +79,11 @@ export class NarrativeScreen {
       }
     }
     document.addEventListener('keydown', this._keyHandler)
+    this._lastTap = 0
     this._clickHandler = () => {
+      const now = Date.now()
+      if (now - this._lastTap < 300) return
+      this._lastTap = now
       if (this._typingTimer) {
         this._finishTyping()
       } else {
@@ -74,6 +91,7 @@ export class NarrativeScreen {
       }
     }
     overlay.addEventListener('click', this._clickHandler)
+    overlay.addEventListener('touchend', this._clickHandler, { passive: true })
   }
 
   _showPage(idx) {
@@ -91,7 +109,7 @@ export class NarrativeScreen {
       }, 1200)
     }
     if (this._overlay) {
-      this._overlay.style.background = 'rgba(0,0,0,0.88)'
+      this._overlay.style.background = `rgba(0,0,0,${this._dim != null ? this._dim : 0.88})`
     }
   }
 
@@ -173,6 +191,7 @@ export class NarrativeScreen {
     }
     if (this._clickHandler && this._overlay) {
       this._overlay.removeEventListener('click', this._clickHandler)
+      this._overlay.removeEventListener('touchend', this._clickHandler)
       this._clickHandler = null
     }
   }
@@ -190,6 +209,8 @@ export class NarrativeScreen {
     this._active = false
     this._pages = []
     this._onComplete = null
+    this._dim = 0.88
+    this._lastTap = 0
   }
 
   isActive() { return this._active }

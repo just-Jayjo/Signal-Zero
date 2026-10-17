@@ -32,10 +32,17 @@ export class Player {
     this._shakeIntensity = 0
     this._shakeDuration = 0
     this._recoilPitch = 0
-    this._recoilRecovery = 8
+    this._recoilRecovery = 6.5
     this.jumping = false
     this.jumpVelocity = 0
     this._jumpPressed = false
+
+    this.touchMoveX = 0
+    this.touchMoveY = 0
+    this.touchMoveMag = 0
+    this.touchSprint = false
+    this.touchActive = false
+    this.touchSensitivity = 0.0034
 
     this.segmentCount = 7
     this.segmentSize = this.maxHealth / this.segmentCount
@@ -45,7 +52,10 @@ export class Player {
   }
 
   reset() {
-    this.health = 100
+    /* maxHealth 會在打贏第一魔王後永久提升到 150，重試時要照新的上限回滿，
+       不然血條會顯示 100/150，分段也仍按舊上限算 */
+    this.health = this.maxHealth
+    this.segmentSize = this.maxHealth / this.segmentCount
     this.sprintStamina = 100
     this.velocity.set(0, 0, 0)
     this.moveForward = false
@@ -63,6 +73,11 @@ export class Player {
     this.jumping = false
     this.jumpVelocity = 0
     this._jumpPressed = false
+    this.touchMoveX = 0
+    this.touchMoveY = 0
+    this.touchMoveMag = 0
+    this.touchSprint = false
+    this.touchActive = false
   }
 
   shake(intensity, duration) {
@@ -77,9 +92,17 @@ export class Player {
 
   onMouseMove(event) {
     if (this._pointerLockFrame < 3) { this._pointerLockFrame++; return }
-    this.yaw -= event.movementX * this.mouseSensitivity
-    this.pitch -= event.movementY * this.mouseSensitivity * this.pitchMultiplier
+    this.look(event.movementX, event.movementY, this.mouseSensitivity)
+  }
+
+  look(dx, dy, sensitivity) {
+    this.yaw -= dx * sensitivity
+    this.pitch -= dy * sensitivity * this.pitchMultiplier
     this.pitch = Math.max(-Math.PI / 2.2, Math.min(Math.PI / 2.2, this.pitch))
+    this._syncCameraRotation()
+  }
+
+  _syncCameraRotation() {
     this.camera.rotation.order = 'YXZ'
     this.camera.rotation.y = this.yaw
     this.camera.rotation.x = this.pitch + this._recoilPitch
@@ -117,6 +140,10 @@ export class Player {
   }
 
   takeDamage(amount) {
+    /* 魔王的 setInterval 是脫離主迴圈跑的，暫停／劇情／轉場時照樣會打到人，
+       在這裡單點擋掉，比逐個改敵人計時器可靠 */
+    const g = typeof window !== 'undefined' && window.__szGame
+    if (g && (g.paused || g.transitioning || (g.narrative && g.narrative.isActive()))) return
     this.health = Math.max(0, this.health - amount)
     this.lastDamageTime = performance.now()
     this.regenSegmentHealed = 0
@@ -139,7 +166,8 @@ export class Player {
       }
     }
 
-    const sprinting = this.sprintHeld && this.sprintStamina > 0
+    const wantSprint = this.touchActive ? this.touchSprint : this.sprintHeld
+    const sprinting = wantSprint && this.sprintStamina > 0
     const speed = sprinting ? this.sprintSpeed : this.baseSpeed
     if (sprinting) {
       this.sprintStamina = Math.max(0, this.sprintStamina - delta * 20)
@@ -154,10 +182,15 @@ export class Player {
     const right = new THREE.Vector3(1, 0, 0).applyAxisAngle(new THREE.Vector3(0, 1, 0), this.yaw)
 
     const moveDir = new THREE.Vector3()
-    if (this.moveForward) moveDir.add(forward)
-    if (this.moveBackward) moveDir.sub(forward)
-    if (this.moveRight) moveDir.add(right)
-    if (this.moveLeft) moveDir.sub(right)
+    if (this.touchActive && (Math.abs(this.touchMoveX) > 0.08 || Math.abs(this.touchMoveY) > 0.08)) {
+      moveDir.addScaledVector(forward, this.touchMoveY)
+      moveDir.addScaledVector(right, this.touchMoveX)
+    } else {
+      if (this.moveForward) moveDir.add(forward)
+      if (this.moveBackward) moveDir.sub(forward)
+      if (this.moveRight) moveDir.add(right)
+      if (this.moveLeft) moveDir.sub(right)
+    }
     if (moveDir.length() > 0) {
       moveDir.normalize()
       this.weaponBob += delta * this.bobSpeed * (speed / this.baseSpeed)
@@ -224,6 +257,7 @@ export class Player {
       this._recoilPitch -= Math.sign(this._recoilPitch) * delta * this._recoilRecovery
       if (Math.abs(this._recoilPitch) < 0.001) this._recoilPitch = 0
     }
+    this._syncCameraRotation()
   }
 
   _checkCollisionXZ(x, z, level, r) {

@@ -240,6 +240,15 @@ export class AudioManager {
     osc.stop(t + 0.18);
   }
 
+  /* 手機（粗指標＝觸控）聽起來比較快：觸控裝置不走 createMediaElementSource，
+     錄音檔的音量沒被 _bgmBoost 拉起來，於是合成層變成主聲、腳步又對不上錄音檔，
+     聽感就偏快。這裡直接調步進：手機放慢、桌機略加快。 */
+  _bgmStepMs(base) {
+    const coarse = typeof window !== 'undefined' &&
+      !!(window.matchMedia && window.matchMedia('(pointer: coarse)').matches)
+    return Math.round(base * (coarse ? 1.18 : 0.9))
+  }
+
   playBGMLayer() {
     if (!this._ensureContext()) return null;
     this.stopBGM();
@@ -614,7 +623,7 @@ export class AudioManager {
     };
 
     /* Sequencer */
-    const stepMs = 286;
+    const stepMs = this._bgmStepMs(286);
     let leadVariant = false;
     this._seqInterval = setInterval(() => {
       if (this._bgmStop) return;
@@ -647,9 +656,9 @@ export class AudioManager {
   }
 
   /* ── Final boss BGM: darker, more aggressive, ~120 BPM ── */
-  playBossBGMLayer() {
+  playBossBGMLayer(keepFile = false) {
     if (!this._ensureContext()) return null;
-    this.stopBGM();
+    if (!keepFile) this.stopBGM();
 
     const now = this.ctx.currentTime;
     this._bgmStop = false;
@@ -905,7 +914,7 @@ export class AudioManager {
     };
 
     /* Sequencer (1/8th, ~120 BPM) */
-    const stepMs = 250;
+    const stepMs = this._bgmStepMs(250);
     this._seqInterval = setInterval(() => {
       if (this._bgmStop) return;
       const b = beat % 16;
@@ -934,36 +943,57 @@ export class AudioManager {
   playBGMFile(filename, fallback) {
     if (!this._ensureContext()) return
     this.stopBGM()
+    let settled = false
+    const useFallback = (why) => {
+      if (settled) return
+      settled = true
+      console.warn('BGM file playback failed, using synth:', why)
+      if (fallback) fallback()
+    }
+    const ua = navigator.userAgent || ''
+    const isIOS = /iP(hone|ad|od)/.test(ua) ||
+      (navigator.maxTouchPoints > 1 && /Macintosh/.test(ua))
+    const isTouch = isIOS || !!(window.matchMedia && window.matchMedia('(pointer: coarse)').matches)
     const tryPlay = (retries = 2) => {
-      try {
-        const audioEl = new Audio(filename || './audio/bgm_industrial.mp3')
-        audioEl.loop = true
-        audioEl.volume = 1.0
-        audioEl.crossOrigin = 'anonymous'
-        const source = this.ctx.createMediaElementSource(audioEl)
-        const gain = this.ctx.createGain()
-        gain.gain.setValueAtTime(1.0, this.ctx.currentTime)
-        source.connect(gain)
-        gain.connect(this._bgmBoost)
-        const playPromise = audioEl.play()
-        if (playPromise !== undefined) {
-          playPromise.catch(() => {
-            if (retries > 0) {
-              setTimeout(() => tryPlay(retries - 1), 500)
-            } else if (fallback) {
-              fallback()
-            }
-          })
-        }
-        this.bgmAudioEl = audioEl
-        this.bgmFileSource = { source, gain }
-      } catch (e) {
+      const audioEl = new Audio(filename || './audio/bgm_industrial.mp3')
+      audioEl.loop = true
+      audioEl.volume = 1.0
+      audioEl.preload = 'auto'
+      let done = false
+      this.bgmAudioEl = audioEl
+      this.bgmFileSource = null
+      const retryOrFail = (why) => {
+        if (done || this.bgmAudioEl !== audioEl) return
+        done = true
+        try { audioEl.pause() } catch { /* ignore */ }
         if (retries > 0) {
           setTimeout(() => tryPlay(retries - 1), 500)
-        } else if (fallback) {
-          console.warn('BGM file playback failed, using synth:', e)
-          fallback()
+        } else {
+          useFallback(why)
         }
+      }
+      try {
+        let source = null
+        let gain = null
+        if (!isTouch) {
+          source = this.ctx.createMediaElementSource(audioEl)
+          gain = this.ctx.createGain()
+          gain.gain.setValueAtTime(1.0, this.ctx.currentTime)
+          source.connect(gain)
+          gain.connect(this._bgmBoost)
+        }
+        audioEl.onerror = () => retryOrFail('media error ' + (audioEl.error && audioEl.error.code))
+        this.bgmFileSource = source ? { source, gain } : null
+        const playPromise = audioEl.play()
+        if (playPromise !== undefined) playPromise.catch(retryOrFail)
+        setTimeout(() => {
+          if (this.bgmAudioEl !== audioEl || settled) return
+          if (audioEl.paused || audioEl.currentTime < 0.1) {
+            useFallback('not audibly playing after 6s')
+          }
+        }, 6000)
+      } catch (e) {
+        retryOrFail(e)
       }
     }
     tryPlay()

@@ -16,6 +16,10 @@ const C = {
   warning: 0xff8800
 }
 
+const _cBox = new THREE.Box3()
+const _cV1 = new THREE.Vector3()
+const _cV2 = new THREE.Vector3()
+
 export class Level4 {
   constructor(scene, difficulty = 'normal', assets = null) {
     this.scene = scene
@@ -571,7 +575,7 @@ export class Level4 {
       const light = new THREE.PointLight(lc, li, this.isTraining ? 28 : 22)
       light.position.set(x, y, z); this.scene.add(light); this.lights.push(light)
       const bulb = new THREE.Mesh(new THREE.SphereGeometry(0.07, 8, 8), bulbMat)
-      bulb.position.copy(light.position); this.scene.add(bulb)
+      bulb.position.copy(light.position); this.scene.add(bulb); this.decorations.push(bulb)
     }
 
     for (const [x, y, z] of [[-9, 3.8, 0], [9, 3.8, 0], [0, 3.8, -9], [0, 3.8, 9]]) {
@@ -662,12 +666,11 @@ export class Level4 {
   }
 
   checkCollision(position, radius) {
+    _cV1.set(position.x - radius, position.y - radius, position.z - radius)
+    _cV2.set(position.x + radius, position.y + radius + 1, position.z + radius)
+    _cBox.set(_cV1, _cV2)
     for (const box of this.collisionBoxes) {
-      const test = new THREE.Box3(
-        new THREE.Vector3(position.x - radius, position.y - radius, position.z - radius),
-        new THREE.Vector3(position.x + radius, position.y + radius + 1, position.z + radius)
-      )
-      if (box.intersectsBox(test)) return true
+      if (box.intersectsBox(_cBox)) return true
     }
     return false
   }

@@ -1,5 +1,394 @@
 # PROGRESS — 訊號：零層
 
+## 2026-09-27 Session 6 — Loop 工程：全站效能／UI／遊戲全面檢查並修改（已部署 `index-Bzlfm3z-.js`）
+
+依使用者要求啟用 `LOOP.md`。可驗證目標：`node --check` 全 PASS + `npm run build` 成功 + 線上 `dist/index.html` 的 JS hash 與本地一致 + 新 CSS 在線上存在。共 3 輪，第 3 輪達成並部署。
+
+### 第 1 輪 — 使用者明確需求 + 高價值低風險
+- **桌機全螢幕**：`main.js` 在 `#difficulty-select` 與訓練模式按鈕的 click 裡各加一次 `requestFullscreenIfPossible()`（click 是瀏覽器最認的使用者手勢）；原有常駐 `pointerdown/mousedown/keydown` 監聽保留。**注意：載入當下 `requestFullscreenIfPossible()` 一定會被瀏覽器拒絕**（非手勢），這行只是碰運氣，真正的觸發靠第一次互動。
+- **桌機「操作指南」放大**：新增 `@media (min-width: 901px) and (min-height: 521px)`（= 兩個小螢幕 media 都不成立時），`#hud-guide-btn` padding 5/13→9/22、字級 0.68→0.92rem；`#pause-menu #pm-guide-btn` 字級→1.06rem、padding 11/24；`#pm-guide .pg-row` →0.94rem、`.pg-ico` scale 1.25。用 `and` 而不是 `or`，才不會蓋掉手機橫向 `max-height:430` 的縮小規則。
+- **`gameInput.js` 真 bug**：`unlisten()` 會拔掉 `fullscreenchange`，但 `listen()` 沒加回 → 死亡／退出訓練後再玩，全螢幕變化不再呼叫 `resize()`。已在 `listen()` 補回。
+- **`player.reset()` 真 bug**：只把 `health` 歸 100、不還原 `maxHealth` → 打贏第一魔王（上限 150）後重試會顯示 100/150 且分段仍按 150/7 算。改成 `health = this.maxHealth` 並重算 `segmentSize`。
+- **`gameLevel.js` 真 bug**：`this.datalogPickups = []` 直接覆寫 → 舊資料拾取物留在場景且不再更新。已補 scene.remove + dispose。
+- **HUD 每幀 DOM**：`hud.update()` 全面改成「值沒變不寫」——血量取整數、彈藥用 `ammo/reserve` key、武器名、敵人數、換彈旗標全部 cache，`innerHTML` 只在真的變時才重建。
+- **boss 血條**：`gameLoop.js` label 的 `querySelector` 改成只在 label 字串變動時查；`gameCombat.showBossHealthBar`/`updateBossHealthBar` 加顯示狀態與百分比 cache（取整數），元素也 cache。
+- **`waveSystem`**：每幀 `filter()` 改手動計數迴圈，不再產生新陣列。
+- **`main.js syncGuideBtn`**：MutationObserver 監聽 `#hud` 的 style，而 hud 每幀改 style → 每幀觸發並寫 `display`。加 `hudGuideBtn._blocked` 比對，沒變不寫。
+
+### 第 2 輪 — 派工 + 單點修復
+- **派工（子代理，只准動 `src/levels/`）**：六個 level 檔的 `checkCollision` 迴圈內 `new Box3/Vector3` 全部提到迴圈外（模組層級 `_cBox/_cV1/_cV2`）；五個 `buildLighting` 補 `this.decorations.push(bulb)`，修掉換關殘留燈泡。已逐行複核 `level1.js:964-972`，語意與原本等價（`test` box 只依賴 position/radius，與 `box` 無關）。
+- **單點擋傷（`player.takeDamage`）**：魔王的 `setInterval` 脫離主迴圈，暫停／劇情／轉場時照樣 `player.takeDamage()`（`shieldGuardian.js:619/692/768`、`signalCore.js:436/620/754`）。不在 12 個計時器逐個改，直接在 `player.js:takeDamage` 開頭用 `window.__szGame`（`main.js` 設定）檢查 `paused || transitioning || narrative.isActive()` 就 return。
+- **`weapon.js` 真 bug**：`WeaponManager.update` 只更新 `currentWeapon`，換槍後另一把的 `_trails`/`_sparks` 永遠回收不到。改成遍歷所有武器，非當前武器只跑 `updateTrails()`/`_updateSparks()`。
+- **`hud.showLevelAdvanceHint`**：gameLoop 每幀呼叫 → 加 `_hintShown` cache。
+
+### 第 3 輪 — 驗證與部署
+- `node --check` 全部改過的檔案 PASS；`npm run build` 成功（`index-Bzlfm3z-.js`）
+- `npm run deploy` → 線上 `https://just-jayjo.github.io/Singal-Zero/` 取得 `assets/index-Bzlfm3z-.js`（與本地一致），`min-width: 901px) and (min-height: 521px` 的桌機指南 CSS 確認存在
+
+### 驗證層級（依 LOOP.md 第 4 節）
+- 第 1 層（對照看）✅、第 2 層（能跑就跑：node --check + vite build）✅、第 3 層（手動代入）部分 ✅（checkCollision 語意逐行核對）、第 4 層（看畫面）❌ **未做，我沒有瀏覽器截圖能力** — 燈泡是否清乾淨、指南放大後的排版、桌機全螢幕是否真的進去，都需要使用者實測。
+
+### 稽核發現但本次未修（下一輪候選）
+- `shieldGuardian.js:598/671`、`signalCore.js:303-314` 砲彈 `setInterval` 每 tick `box.clone().expandByScalar()` 的分配
+- `gameCombat.js:353/380`、`weapon.js:348` 粒子每幀 `vel.clone()`
+- `gameCombat.js` `updateExplosions()` 用寫死的 `0.016` 推進，沒有吃 delta、暫停時照樣累進
+- `levels/*.js:811/560/386` 每關 9 個 PointLight + `gameInit` antialias/dpr1.5/soft shadow — 最大的 GPU 開銷，動它之前要先看畫面
+- `narrative.js:149/162` `_close()` 的 setTimeout 競態（期間開新對話會被移除）
+- `gameLevel.js:32-35` `spawnEnemies()` 只在 `currentLevel===0` 呼叫 → 波次敵人與 boss 完全不吃 `enemyHp` 難度倍率（困難模式只有玩家受傷倍率生效）
+- `targetDummy.js:98-99` `_flashBody` 先 dispose 正在用的材質再 clone
+
+## 2026-09-27 Session 5 — levels 熱路徑記憶體配置 + 燈泡 mesh 殘留修復（build 通過，未部署）
+
+### 已完成（只動 `src/levels/` 六個檔）
+**事項 1：`checkCollision` 迴圈內不再 `new`**
+- `level1/2/3/4/5/trainingRange.js` 各自在模組層級（class 之外）加 `_cBox`/`_cV1`/`_cV2` 暫存實例
+- 六檔原本的 `test` box 只依賴 `position`/`radius`、**跟 `box` 無關**，所以直接提到迴圈外組一次（`_cV1.set` + `_cV2.set` + `_cBox.set`），迴圈內只做 `box.intersectsBox(_cBox)`；語意與原本「每次 new 一個 test」完全一致（已核對 three r170 `Box3.set` 是 copy、`intersectsBox` 不 mutate 任何一邊）
+- `this.collisionBoxes` 內的 box 全程未被 mutate，`computeCollisionBoxes` / `collisionBoxes.push(new Box3(...))` 這些建置期配置**沒動**（不是熱路徑）
+
+**事項 2：燈泡 mesh 進 `decorations`**
+- `level1:buildLighting`、`level2:buildLighting`、`level3:buildLighting`、`level4:buildLighting`、`level5:buildLighting` 各補一行 `this.decorations.push(bulb)`（原本只 `scene.add`）
+- `trainingRange.js` **不需要改**：它的燈板 `panel` 本來就 push 進 `this.lights`，`buildGrenadePickups()` 是空的；掃過全部 `scene.add` 後，唯一沒被陣列管理的就剩敵人（`game.enemies`，歸遊戲管，不歸 level.clear）
+
+### 驗證
+- `node --check` 六個檔案全 PASS
+- `npm run build` 成功：45 modules，`dist/assets/index-DzjcoxD0.js` 959.73 kB（僅既有的 chunk 過大警告），**未跑 deploy**
+- 未實際開瀏覽器，換關後燈泡是否真的清掉需要實測
+
+## 2026-09-27 Session 4 — 後坐力 / 手榴彈丟擲動畫 / 裝置適配（已部署 `index-BkzxvEQI.js`）
+
+### 已完成
+**後坐力加明顯（`src/core/weapon.js` + `src/core/player.js`）**
+- 基準 `recoilAmount` 0.02→**0.032**、`recoilVisualKick` 0.03→**0.05**；射擊類 0.05/0.07→**0.078/0.108**；另一把 0.04/0.06→**0.062/0.092**（大約 +60%）
+- `player._recoilRecovery` 8→**6.5**：回正慢一點，後坐比較讀得出來
+- `recoilVisualKick` 同時放大 weapon 的位移後退（`recoilBack = _recoilKick * 0.4`）與 `rotateX` 抬頭，所以視覺幅度也一起變大
+- 只調垂直方向（`player.applyRecoil` 只吃 pitch），沒加 yaw，避免跟觸控拖曳視角打架
+
+**手榴彈丟擲動畫（`src/core/weapon.js` Grenade）**
+- `createMesh()` 把手榴彈本體拆成獨立子群組 `this._nadeGroup`，手掌/手指仍在 `this.mesh` 上
+- `shoot()` 改成只記錄狀態（`_throwT=0.0001`、`_throwEnemies`），**不再當場生成投射物**
+- 新增 `_updateThrow(delta)`：全程 **0.30 秒**，`RELEASE = 0.45` 時才真正丟出去；手上那顆在 release 之後隱藏，`currentAmmo > 0`（= reload 完）才重新出現
+- 新增 `_releaseGrenade()`：用 `this._nadeGroup.clone(true)` 當投射物（**真的就是手上那顆飛出去**），從手上取得世界座標/朝向，初速維持原設計 `dir * throwStrength` + `vel.y += 3`
+- 新增 `_updateWeaponTransform()` 覆寫：`super` 算完再疊揮臂偏移——前 45% smoothstep 往後拉（x+0.05 / y−0.11 / z+0.14、rotX−0.85、rotY+0.45），後段 `sin(πq)` 往前甩（z−0.30、rotX+1.5）再歸位；最後把 `_forearmGroup` 用新的 grip 位置同步回去（否則前臂會停在原地）
+- 投射物加 `spin` 旋轉，落地爆炸
+- **重要：`clone(true)` 共用 geometry/material，所以爆炸路徑的 `geometry.dispose()`/`material.dispose()` 必須拿掉，不然丟第二顆時手上那顆會變黑/消失**（已拿掉）
+- `Grenade.reset()` 覆寫清 `_throwT`/`_throwReleased`
+
+**手機/平板/筆電適配（`index.html`）**
+- `#pm-guide` padding-top 改 `max(7vh, 64px)`：收合按鈕固定在右上後，手機橫向 7vh≈28px 會讓它壓到指南標題
+- 新增 `@media (pointer: coarse) and (min-width: 900px) and (min-height: 600px)`：平板橫向把射擊 74→86、跳躍 60→70、武器 42→50、選單 40→46，並放大指南與暫停選單字級
+- **刻意不改搖桿**：`touchControls.js` 的 `JOY_RADIUS = 52` 寫死，改 `#joystick-base` 外框會讓推滿判定跟視覺對不上
+
+### 尚未做
+1. 過場改成「主角從電梯走出來」
+2. Boss 音樂：兩魔王做出差異、改用「開場那三聲」的風格
+3. 最終 Boss 難度 / 召喚時機 / 第一階段加攻擊
+4. 結局三段爆炸 → 魔王變電梯 → 主角帶武器走進去 → 下降
+
+## 2026-09-27 Session 3 — 手機 UI / 全螢幕 / 音樂速度 / 故事線邏輯修復（已部署 `index-DegwdWOa.js`）
+
+### 已完成
+
+**手機版按鈕縮小 + 選單鍵下移（`index.html`）**
+- `#btn-fire` 90→74（`right:20 bottom:30`）、`#btn-jump` 74→60（`right:110 bottom:36`）、`#btn-weapon` 50→42（`bottom:120`）、`#btn-menu` 46→40 且 `top:14→54`（原設定是「往下移一點」，若要改回上移一格就好）
+- 搖桿 `#joystick-base`/`#thumb` **沒動**：`touchControls.js` 的 `JOY_RADIUS = 52` 是寫死的，縮了外框會讓推滿判定跟視覺對不上
+
+**手機版開發者模式（`src/main.js`）**
+- 抽出 `activateDevMode()` 與 `makeTapCounter(targets, need, windowMs, onDone)`
+- 主畫面 `.ds-title` 維持 10 次／2.5 秒；**新增「操作指南」按鈕（`#pm-guide-btn` + `#hud-guide-btn` 同一個計數器）20 秒內連點 10 次**
+- 手機的玩法：暫停 → 連點「操作指南」，因為同顆按鈕開了會變「收合指南」再點就關，一顆按鈕自己來回點即可
+
+**收合按鈕移開「返回主選單」（`index.html`）**
+- `#pm-guide-close` 從內容底部置中改成 `position:fixed; top:16px; right:16px; z-index:421`，原本的位置跟 `.pm-panel` 裡的 `#pm-quit` 同一條垂直線上，關完指南手指剛好落在「返回主選單」
+- `#pm-guide-btn` `margin-top:7→17`、`#pm-quit` `margin-top:7→21`：操作指南下移 10px，同時它跟返回主選單的間距從 14 拉到 28
+
+**一進站／暫停回遊戲都自動全螢幕（`src/main.js`）**
+- 常駐監聽 `pointerdown / touchstart / mousedown / keydown`，只要當下 `!document.fullscreenElement` 就 `document.documentElement.requestFullscreen({ navigationUI: 'hide' })`
+- `fsPending` 旗標避免同一次手勢觸發三次呼叫
+- **為什麼一定要綁手勢**：瀏覽器規定非使用者操作的 `requestFullscreen()` 一定被拒絕，所以「載入即全螢幕」做不到，最早就是「第一次任意點一下」。暫停後點「繼續遊戲」也是手勢 → 自動回全螢幕
+
+**音樂速度（`src/core/audio.js`）**
+- 新增 `_bgmStepMs(base)`：`(pointer: coarse)` → ×1.18（手機放慢），否則 ×0.90（桌機略加快）
+- 套在 `playBGMLayer` 的 `stepMs 286` 與 `playBossBGMLayer` 的 `stepMs 250`；`playEndingBGM` 的節奏**沒動**
+- **診斷（推理判斷，無法實際聽）**：兩個合成器都是寫死的 `setInterval(ms)`，牆上時間在手機桌機一樣快，所以合成器本身不可能比較快。差別來自錄音檔——觸控裝置我們刻意不走 `createMediaElementSource`（iOS 穩定性），檔音沒經過 `_bgmBoost`（2.2）被壓在下面，於是**合成層變成主聲**；一般層 `playBGMLayer` 只是 `playBGMFile` 的 fallback，所以手機若檔案播放失敗就只剩合成層，而合成層的 105/120 BPM 跟錄音檔對不上，聽起來就偏快
+- **若調完還是不對**，可調的旋鈕就是 `1.18` / `0.90` 兩個數字，或改方向：手機上檔案播放成功時完全不要疊合成層
+
+**故事線邏輯漏洞修復**
+- `narrativeData.js` 整份重寫：
+  - INTRO 補「你是第二組，第一組沒有回報」（解釋為何單人、哨兵還在跑）；拿掉「來自地下八百公尺」避免跟 log_02 的 800m 座標混淆
+  - 第一層補「大廳的電梯還亮著——只有往下那顆」→ 結局的電梯不再憑空出現（也配合接下來每關電梯銜接）
+  - 第三層「是有人下令啟動的」→「是用一個死人的帳號下令的」，直接扣 log_04 的林博士
+  - 第四層補「焚化爐從沒點過火，他沒能燒掉任何東西」→ 接上 log_05 研究員要燒核心備份卻失蹤的斷點
+  - 第五層補「藍圖上沒有這一層，他們還是叫它零層」→ 解決「第五層＝零層」的命名矛盾，扣 log_02
+  - 結局「訊號沒有。」語意曖昧 →「訊號沒有停。」
+- `datalog.js` 四處矛盾：
+  - **log_01**：SOS 與第三層「它不在求救」衝突 → 明寫封包格式不屬於任何通訊協定、零層沒有通訊設備、「不是我們在求救」（SOS 是它抄來的）
+  - **log_04**：林博士「六週前」→「四週前」（=672h），才能跟 log_07「密封艙 781 小時前最後開啟」排成 781h 裝鑽桿 → 672h 她進閘門 → 閘門未再開；另外補「命令的時間戳落在她失蹤之後」
+  - **log_06**：「四樓是最後一層、再往上是實心岩盤」跟第 1→5 層往下的樓層矛盾 → 改成「冷卻迴圈是封閉迴路、壓力差為零、沒有儲液槽」，恐怖感保留
+  - **log_07**：「九分鐘前發生第一次變化」跟 log_05「第七次回傳中文」衝突 → 改「最新一次變化，這是三十天內的第七次」
+- `gameEnding.js`：結局標題「信號**中**斷」（用字還錯成「信」）與結果畫面「訊號**中**斷」→ 兩處統一改 **「訊號仍在」**（原本「訊號中斷」跟開放式結尾「訊號沒有停」直接矛盾）
+
+### 尚未做（下一輪）
+1. 過場改成「主角從電梯走出來」（目前是站在鏡頭前 idle）
+2. Boss 音樂：第一魔王 vs 最終魔王做出差異、改用「開場那三聲」的風格、降低電音的陡度
+3. 最終 Boss：第一階段調難、最終階段小兵提早召喚＋最後再多召喚、第一階段加一種攻擊（從最終階段挪一種過來）
+4. 結局過場：爆炸分三次（boom boom boom、動態消散、三次顏色不同）→ 魔王本體變成電梯 → 主角走過去（**武器要黏在手上**）→ 進電梯 → 下降 → 進劇情
+5. 以上全部完成後，最後一次做**手機／筆電／平板適配總檢查**
+
+## 2026-09-27 Session 2 — 主角模型 / 5 秒關卡轉場 / 結局過場重寫（已部署 `index-DX8v1078.js`）
+
+### 已完成
+
+**F1 主角模型（Kenney Animated Characters 1，CC0）**
+- 素材：`public/models/survivor/` — `characterMedium.fbx`（167KB，**二進位 FBX，檔內無任何貼圖檔名**）、`idle.fbx`(608KB)、`run.fbx`(573KB)、`survivorMaleB.png`、`LICENSE-Kenney.txt`（CC0，載入 `survivorMaleB.png` 手動指定）
+- 採用**執行期 `FBXLoader`**（`three/addons/loaders/FBXLoader.js`），不是 GLB——這台機器沒有 blender / fbx2gltf，無法事前轉檔；three r170 的 exports map 內建 `three/addons/*`，Vite 直接吃得下（build 通過，45 modules）
+- `src/core/protagonist.js`：`loadProtagonist()` 單次快取，`createProtagonist(data)` 用 `SkeletonUtils.clone` 產生實例
+  - 貼圖手動給：`MeshStandardMaterial` + `SRGBColorSpace` + `color 0xcfd9e2`、`frustumCulled=false`（skinned mesh 必要）
+  - 依 BBox 歸一化到 **1.78m**，再把模型平移成「腳底在 y=0、水平置中」→ 外層 root 的原點就是腳底
+  - 動畫從 `idle.fbx`/`run.fbx` 的 `animations[0]` 取，掛在 root 的 `mixer` 上
+- **未驗證項（無法在無瀏覽器環境確認）**：模型朝向（用 `lookAt` 讓 +Z 朝目標，若看起來倒退就是需要加一行 `rotateY(Math.PI)`）、貼圖 flipY、動作 clip 與 mesh 骨骼名稱是否對得上（同一作者，機率高但沒實測）
+- 套用點：**關卡轉場過場** + **結局過場**（兩處都只在過場出現，不影響玩家操控的 FPS 視角）
+
+**F3 5 秒關卡轉場（`src/core/gameTransition.js` + `index.html #level-transition`）**
+- `advanceLevel()` 尾端原本的 `narrative.show(pages, cb)` 整段換成 `_startLevelTransition(floorName, body, onReady, onDone)`
+  - `onReady`（黑幕期間 0.95s）只做 `_buildCurrentLevel()`；`onDone`（5.0s）才決定後續：`currentLevel===2` → `_spawnBossWithDescent` 的 boss intro，其餘 → `transitioning=false` + `lockPointer()`
+- 時程（`gameTransition.js` 的 `T`）：0.95s 蓋黑+建關+生成主角 → 1.15s 文字 → 2.1s 揭幕 → 4.15s 蓋回 → 5.0s 結束
+- 文案：`#lt-floor` = `電梯下行 · FLOOR 0X`，`#lt-name` = `LEVEL_NAMES[idx]`，`#lt-line` = `NARRATIVE_LEVELS[idx].slice(1)`（標題列拿掉，避免重複）
+- 攝影機：主角放在鏡頭前方 5m、腳底 y=0、`lookAt` 鏡頭；鏡頭固定 y=1.55、沿 capture 的 forward 從 5.6m 推近到 3.5m；結束時還原 `camPos0/camQuat0`
+- `gameLoop.animate()` 在 `endingSequence` 之後、`narrative.isActive()||transitioning` **之前**插入 `if (this._transition)` 分支：跑 `_updateLevelTransition` + render + return
+- `#level-transition` z-index 240（低於 narrative 250、高於遊戲畫面）；`.on` 顯示、`.show-text` 淡入文字
+
+**F2 結局過場重寫（`src/core/gameEnding.js`）**
+- 時程 `EC = { walkStart: 3.0, walkEnd: 9.5, fadeEnd: 12.0 }`
+  - **A（0–3s）Boss 爆炸特寫**：`gameLoop.js` 死亡 splice 前記錄 `this._lastBossPos`（shieldGuardian/signalCore），`_spawnEndingExplosion()` 造閃光球 + 擴散環 + `_createDeathDebris`×4；此段會呼叫 `updateExplosions()`（原本結局分支早 return，debris 不會動）
+  - **B（3–9.5s）主角走向電梯**：主角從 `boss + back*6.5` 走到 `boss + back*16.5`（10m / 6.5s ≈ 1.5m/s），`run` 動作 `timeScale 1.4`；鏡頭由爆炸位（`camA`）在 2.5s 內 pan 到 `camB` 並改看主角
+  - **C（9.5–12s）淡出黑幕**：動態建 `#ending-fade`（z-index **240**，必須低於 narrative 250 否則蓋住文字），12s 後才 `narrative.show(NARRATIVE_ENDING, {dim:0.52})` → `_showFinalEndingOverlay()`
+- 電梯道具 `_buildElevatorProp()`：程序化幾何（背板/左右柱/門楣 + `#00f2ff` 加法混色光縫 + 地面光），放在 heroEnd、`lookAt(heroStart)` 朝向走來的主角
+- `enableEndingSequenceControls()` 改到 `startEndingSequence()` 就啟用（原本只在 overlay 才綁），`_showFinalEndingOverlay` 裡移除重複綁定
+- `skipEndingSequence()` 補齊清理：hero、elevator、flash、ring、`#ending-fade`
+- 攝影機段落整段包在 `if (!this._endingCinemaDone)` 裡，避免結尾 `endingTimer` 歸零後鏡頭跳回 A 位
+- **假設待定**：電梯上下方向未寫死（文案只說「走進電梯、門關上」）；過場 `#lt-floor` 寫「電梯下行」暗示往下，若要改回原設定的「上升」一行字可翻
+
+### 下一步
+1. **使用者實際看畫面驗證**（這台機器沒有瀏覽器截圖能力，以下全是推理判斷、未實測）：
+   - 主角模型有沒有貼圖、比例對不對（目標 1.78m）
+   - 主角**朝向**是否正確（`lookAt` 讓 +Z 朝目標；若走路是倒退 → `gameEnding.js` 與 `gameTransition.js` 的 `lookAt(...)` 各加 `model.rotateY(Math.PI)`）
+   - 動作有沒有播（`idle.fbx`/`run.fbx` 的 clip 與 mesh 骨骼名是否同名）
+   - 5 秒轉場的節奏、結局 12 秒過場的鏡頭有沒有穿牆
+2. 若轉場/結局節奏不對，調 `gameTransition.js` 的 `T` 與 `gameEnding.js` 的 `EC`
+
+## 2026-09-27 Session — 敘事精簡 + UI/訓練/音樂/Boss 攻擊批次（已部署 `index-uXpWgiii.js`）
+
+### 已完成
+
+**故事文字精簡 + 邏輯梳理（`src/core/narrativeData.js` 整份重寫）**
+- 開場 4 句 → 2 句；每層 2–4 長句 → 標題 + 1–2 短句；Boss 介紹 2 長句 → 2 短句；結尾 11 句 → 3 句
+- 主線改成貫穿意象：「訊號」逐層變強 → 第三層轉折（防禦不是失控、訊號在防守）→ 底層「它一直都在」→ 結尾「核心停止了／訊號沒有／你走進電梯」
+- `gameEnding.js` 結尾 overlay 同步精簡：移除 `.ending-detail` 一整行，`.ending-sub` 改「零層核心已停止」，浮現時程 15s→12s、自動跳過 28s→24s；`result-subtitle` 改「零層核心已停止。」（原本「訊號源頭已被摧毀」跟開放式結尾矛盾）
+- **假設**：結尾電梯方向目前文案走「走進電梯、門關上」，未寫死上下；等主角模型 + 下降動畫做進去時再定
+
+**每波敵人計數（`waveSystem.js` + `gameLoop.js`）**
+- `WaveSystem` 新增 `currentWaveTotal`（constructor + `reset()` 都歸零），`_startNextWave()` 用 `def.enemies.reduce` 算該波總數
+- `gameLoop.js:188` HUD 分母改 `Math.max(waveTotal, this.enemies.length)`；波尚未定義時退回 `totalEnemies`；`hud.js` 不動
+- 效果：殘存敵軍顯示「本波剩餘 / 本波總數」，不再是「整關總數 / 已存活數」
+- 第四層（index 3）最後兩波各減 2 隻：波次5/6 9→7、波次6/6 12→10
+
+**終 Boss 攻擊多樣化（`src/enemies/signalCore.js`）—— 修掉「只有轉阶段、幾乎沒技能」**
+- constructor 裡 `orbitalTimer/pulseTimer/summonTimer/vortexTimer/missileTimer/laserTimer` 原本全是 `99.0`，且只有 phase≥2 才遞減 → 實際從未觸發（`summonTimer=99` 從 commit `14ed135 v0.1 beta` 就是這樣）
+- 改為起始值 `orbital 6 / pulse 4 / summon 9 / vortex 9 / missile 11 / laser 7`
+- `pulseTimer`（地面衝擊波 `_firePulseWave`）**移出 `phase >= 2` 閘**，phase 1 就會放，節奏 11s→9s→7s；`summonTimer` 重置 18s→14s；orbital/missile 維持 phase≥2
+- 已確認 ShieldGuardian 的 `_groundSlam`（7m、冷卻 6/8s）與 `_summonCooldown` 完好未動
+
+**音樂三軌分流（Q3=A：檔案軌 + 疊強化合成層）**
+- `audio.js` `playBossBGMLayer(keepFile = false)`：`keepFile=true` 時**不呼叫 `stopBGM()`**，讓 WAV/MP3 繼續播、合成層疊上去
+- `gameLevel.js _buildCurrentLevel`：index 4 → `bgm_boss.wav`、index 2（第一魔王「壁壘」）→ `bgm_industrial.mp3`，兩者都 `null` fallback + 直接疊 `playBossBGMLayer(true)`；其餘層維持 `bgm_normal.wav` + `playBGMLayer()` fallback
+- 順序固定：先 `playBGMFile`（內部會 `stopBGM()`）再疊層，避免層被清掉
+
+**桌機左上角操作指南（`index.html` + `main.js`）**
+- `#pm-guide` **從暫停選單裡搬出來**改成全螢幕獨立浮層（`z-index: 420`），新增 `#pm-guide-close` 收合按鈕（因為蓋住暫停選單後原本的收合鍵點不到）
+- 新增 `#hud-guide-btn`（fixed、`z-index: 415`、`top:8px left:14px`，`body.touch-mode` 強制隱藏）
+- **為什麼不放在 `#hud` 裡**：桌機 pointer lock 期間點不到，解鎖時又被 `#blocker`(z100)/`#pause-menu`(z400) 蓋住 → 放外面 + 用 `MutationObserver` 同步 `#hud` 與 `#results-screen` 的 display 決定顯隱
+- `main.js` 抽出 `setGuideOpen()/toggleGuide()`，`#pm-guide-btn`、`#hud-guide-btn`、`#pm-guide-close` 三個入口共用；另外加 `H` 鍵切換（pointer lock 時唯一可用的操作方式），key-mode 指南補 `<b>H</b> 操作指南` 一列
+- 桌機 `#enemy-panel` 由 `top:30px` 下移到 `top:46px`，讓位給左上角按鈕
+
+**魔王訓練解鎖（`localStorage`，專案首次使用 storage）**
+- 鍵：`sz_boss1`（擊敗第 3 層「壁壘」，在 `advanceLevel()` `prevLevel===2` 時寫入）、`sz_boss2`（通關，`startEndingSequence()` 寫入），皆 `try/catch`
+- `main.js` `refreshTrainingLocks()`：未解鎖的 `.training-btn.boss-btn` 設 `disabled` + `.locked`，點擊 handler 也擋 `btn.disabled`；`MutationObserver` 監看 `#training-select` 顯示時刷新
+
+**訓練選單橫向排版 + 魔王訓練區（`index.html`）**
+- `.training-boss-label`（紅字「魔王訓練」）+ `.boss-options` 兩顆紅框按鈕：`boss1 壁壘`、`boss2 零層核心`，desc 寫解鎖條件
+- 手機 media query 內 `.training-options` 改 `flex-direction: row; flex-wrap: wrap`、`.training-btn { flex: 1 1 210px }`（寬螢幕 4 併排、窄螢幕 2×2）；`.boss-options` 桌機也橫排
+- `gameTraining.js`：import `ShieldGuardian`/`SignalCore`；`_spawnTrainingEnemies()` 加 `boss1/boss2` 分支（在 `(14,0,0)` 生成、`boss._game = this`、`showBossHealthBar(true)`）；`_showEnemyProfile` 的 `svgIcons`/`data` 與 `hints` 都補兩隻 Boss
+
+### 部署
+- `npm run build` → `dist/assets/index-uXpWgiii.js`；`npm run deploy` → `gh-pages`；線上 20s 後確認 `index-uXpWgiii.js` + `boss-options` 已上線
+
+### 下一步
+- **F3** 5 秒關卡切換過場動畫（目前 `advanceLevel()` 是直接跳定位 + 叙事卡）
+- **F1** 下載 CC0 授權 GLTF 主角模型（使用者選 B：外部 CC0 + 自己修改），需先用網頁搜尋找到可穩定下載的來源，不可亂猜 URL
+- **F2** 結尾動畫改寫：魔王爆炸特寫 → 主角走向電梯 → 電梯 → 畫面淡出（需要 F1 的模型）
+- 三者完成後 build + deploy + 更新本檔
+
+---
+
+## 2026-07-26 Session — 手機橫屏觸控操作 + 結尾劇情動畫串接 + Boss 弱化
+
+### 已完成
+
+**觸控操作（新檔 `src/core/touchControls.js`）**
+- `isTouchDevice()` 用 `matchMedia('(pointer: coarse)')` 判斷**主要指標**是否為粗指標，觸控筆電（滑鼠為主要指標）不會誤入觸控模式
+- `initTouchControls(game)`：在 `src/main.js` 的 `game.init()` 之後呼叫；成功才設 `game.isTouch = true`、`body.touch-mode`
+- 浮動搖桿（`#joystick-zone` 左 45%）：`JOY_RADIUS=52`、`SPRINT_THRESHOLD=0.72`，推過 72% 半徑即衝刺，**沒有獨立衝刺鍵**（照使用者規格）
+- 視角（`#aim-zone` 右 55%）：拖曳呼叫 `player.look(dx, dy, 0.0034)`
+- 按鈕：`#btn-fire`（按住持續射擊）、`#btn-jump`、`#btn-weapon`（`switchTo((i+1)%len)` 循環切槍）、`#btn-menu`（開暫停選單）
+- 附加：點 `#ammo-panel` 手動換彈、點 `#level-hint` 推進關卡（手機沒有 Q 鍵）
+- 橫豎螢幕：直立時顯示 `#rotate-overlay` 並自動暫停（`pausedByRotation`），轉回橫向自動恢復
+- `game._touchReset`：重設搖桿/開火旗標，在 `openPauseMenu()` 與 `restart()` 中呼叫
+
+**Player 觸控輸入（`src/core/player.js`）**
+- 新增 `touchMoveX/Y/Mag`、`touchSprint`、`touchActive`、`touchSensitivity`（constructor + `reset()` 都有）
+- 把原本 `onMouseMove` 的 yaw/pitch 計算抽成 `look(dx, dy, sensitivity)`，桌機與觸控共用
+- 新增 `_syncCameraRotation()`；`update()` **每幀末尾呼叫** —— 這同時修掉一個既有 bug：`_recoilPitch` 原本只在 `onMouseMove` 裡寫進 `camera.rotation.x`，不動滑鼠時後座力永遠不回復
+- 移動分支：`touchActive` 時用搖桿向量，否則用 WASD
+- 衝刺判斷改為 `wantSprint = touchActive ? touchSprint : sprintHeld`
+
+**暫停機制（`src/core/gameInput.js`）**
+- 新增 `openPauseMenu()` / `closePauseMenu()`：手機沒有 pointer lock，不能沿用 `onPointerLockChange` 的暫停
+- `lockPointer()` 加 `if (this.isTouch) return`，並用 try/catch 包住 `requestPointerLock()`（新版 API 回傳 Promise，失敗時避免未捕捉拒絕）
+- `body.ui-paused` 搭配 CSS 隱藏觸控按鈕
+
+**結尾劇情動畫（`src/core/gameEnding.js`）—— 原本是死程式碼**
+- 原況：`startEndingSequence()` 只播敘事就 `showResults()`，`endingSequence` 從未設 `true`、`_showFinalEndingOverlay()` 從未被呼叫
+- 現在流程：`startEndingSequence()` → 設 `endingSequence=true`、記錄 `_endingCameraPos`、生成 70 顆資料迴聲粒子、加 `body.ending-cinema`（電影黑邊）→ `narrative.show(NARRATIVE_ENDING, cb, { dim: 0.52 })` → 敘事結束 → `_showFinalEndingOverlay()`（分階段浮現標題/戰報/製作名單/按鈕）
+- `animate()` 中 `endingSequence` 分支移到 `narrative/transitioning` 判斷**之前**，否則被敘事的 early return 吃掉
+- `updateEndingSequence` 鏡頭繞行 + 粒子環繞持續運作；自動跳過改為 `_endingOverlay` 存在且 `endingTimer > 28`
+- 修掉既有 bug：`enableEndingSequenceControls` 的 `mousedown` 原本任意點擊就跳過，導致 overlay 的按鈕永遠點不到 → 加 `closest('button')` 過濾，並同時註冊 `touchend`
+- `_spawnEndingParticles` 每顆独立 geometry/material，配合既有的 dispose 迴圈
+
+**敘事畫面（`src/ui/narrative.js`）**
+- `show(pages, onComplete, opts)` 新增 `opts.dim`（預設 0.88），結尾用 0.52 讓背景 3D 場景透出來
+- 文字加半透明面板底（`rgba(0,8,16,0.55)` + 邊框）保證行動裝置可讀
+- 補 `touchend` 前進（帶 300ms 去抖避免與 `click` 重複觸發），提示文字在 touch-mode 顯示「點擊畫面繼續」
+
+**Boss 弱化**
+- ShieldGuardian：HP 800→700、傷害 5→4（狂暴 7→6）、射擊冷卻 2.2→2.5（狂暴 1.5→1.8）、砸地 6/4→5/3、雷射 10/s→7/s、飛彈 `+3`→`+2`
+- SignalCore：HP 2000→1750、射擊冷卻 `[1.5,1.8,2.0]`→`[1.8,2.1,2.4]`、瞄準彈傷害 `[4,5,7]`→`[3,4,6]`、追蹤球 `3+phase`→`2+phase`、環狀 `3+phase`→`2+phase`、衝擊波 `4+2*phase`→`3+2*phase`、飛彈 10→8、死亡爆波 15→12、雷射 14→11 / `6*delta`→`4.5*delta`、近身 `4*delta`→`3*delta`
+
+**HUD / CSS（`index.html`、`src/ui/hud.js`）**
+- meta：viewport（`user-scalable=no, viewport-fit=cover`）、mobile-web-app-capable、theme-color
+- `#rotate-overlay`、`#cinema-bars`（z-260，蓋在敘事 250 之上）、`#touch-controls`（z-30）、`#pause-menu`（z-400）
+- `body.ending-cinema #touch-controls { display:none }`（劇情中隱藏虛擬按鈕）
+- **關鍵修正**：`body.touch-mode #hud { z-index: 35 }` —— `#hud` 原本 z-10，可互動的 `#ammo-panel` / `#level-hint` 會被 z-30 的 touch 區域擋住點不到；同時隱藏 `#hud::before/::after` 角框避免蓋到按鈕
+- `body.touch-mode #level-hint` 改置中下方 `bottom:68px`，避開右側武器切換鍵
+- `showLevelAdvanceHint()` 依 `body.touch-mode` 切換「點擊這裡前往下一層」/「按 Q 前往下一層」
+
+### 手機 UI 第二輪（2026-07-26，已部署上線）
+
+**按鈕改圖示 + 重新定位（`index.html`）**
+- `#btn-fire` → 準星 SVG（圓環＋十字＋中心點）、`#btn-jump` → 跳躍人形 SVG、`#btn-weapon` → 循環箭頭 SVG、`#btn-menu` → 漢堡 SVG，全部改用 `stroke="currentColor"`，移除原本的「射/跳/FIRE/JUMP」文字與 `.bf-sub`/`.bj-sub` CSS
+- 新增 `.touch-btn .tb-ico` 尺寸規則
+- 位置：射擊 `right:24 bottom:58 (90×90)`（上移離開手勢列）、跳躍 `right:136 bottom:66 (74×74)`、切槍 `right:24 bottom:164 (50×50)`（移到右緣，原本 `right:128`）、選單維持左上
+- `#enemy-panel`（殘存敵軍）touch-mode 從 `top:74 left:16` 改為 `top:16 left:74`，排到最上排、在選單鍵右邊
+
+**暫停選單新增操作指南（`index.html` + `src/main.js`）**
+- `#pause-menu` 加入 `#pm-guide-btn` 與 `#pm-guide`，兩組指南：`[data-mode="touch"]`（搖桿/視角/各按鈕/換彈/推進關卡）與 `[data-mode="key"]`（WASD/滑鼠/右鍵衝刺/Space/R/1-2-3/Q），用 `body.touch-mode` 切換只顯示對應那組
+- 開關邏輯寫在 `main.js`（不能放 `touchControls.js`，那個檔在桌機會直接 return）
+- `.pm-panel` 加 `max-height:92vh; overflow-y:auto` 避免橫向螢幕裝不下
+
+**主畫面手機橫向（`index.html` `@media (max-height:430px)`）**
+- `#blocker`、`#difficulty-select`、`#training-select` 加 `overflow-y:auto` 保險
+- 難度選擇：隱裝飾角框、面板 padding 縮小、`ds-title` 改 `clamp(1.4rem,6vw,2.2rem)`、`ds-sub`/`ds-divider` 邊距縮小、按鈕改 `width:100%` + padding 9px、`.btn-hint` 縮到 0.55rem（原本按鈕 `min-width:280px; padding:16px 60px` 在 375px 高的橫向螢幕會超出）
+- 暫停選單指南在 430px 高以下字級再縮一級
+
+**部署**：`npm run build` → `npm run deploy`（gh-pages）→ 線上已驗證為 `index-DD0vMqh8.js`，`pm-guide` / `tb-ico` 都有出現
+**網址**：https://just-jayjo.github.io/Singal-Zero/
+
+### 手機 UI 第三輪 + 手機 BGM + 訓練模式流程（2026-07-26，已部署上線 `index-CSmnqL0P.js`）
+
+**操作指南（`index.html` `#pm-guide`）**
+- 新增 `.pg-ico`（inline SVG 尺寸規則）
+- 「左半螢幕拖曳」配搖桿 SVG、「右半螢幕拖曳」配眼睛 SVG
+- 射擊鍵／跳躍鍵／切換武器鍵三列**直接複製畫面上按鈕的同一組 SVG**（原本用 `◎ ⤒ ⟳` 文字符號，跟實際按鈕不一致）
+- 刪除「☰ 選單鍵」那一列（使用者要求），其餘列全保留
+
+**按鈕微調（`index.html`）**
+- 跳躍鍵圖示從跳躍人形改成上箭頭 SVG（使用者要求）
+- 右側三鍵整體下移 24px：射擊 `bottom:58→34`、跳躍 `66→42`、切槍 `164→140`
+- `body.touch-mode #enemy-profile { top:2px; left:74px }`（殘存敵軍面板排到最上排）
+
+**開發者模式（`index.html` + `src/main.js`）**
+- 手機沒有鍵盤打不出 Konami，改成主畫面標題 `.ds-title` **2.5 秒內連點 10 次**啟用，啟用時標題閃「開發者模式已啟用」1.8 秒
+- `body.touch-mode #dev-indicator` 原本 `display:none !important`，改成顯示在左下 `left:16 bottom:62` 字級縮小
+- 補既有 bug：`restart()` 與 `exitTraining()` 會把 `devMode` 歸零但沒呼叫 `hud.showDevMode(false)`，指示燈會殘留 → 兩處補上
+
+**手機 BGM 完全無聲（`src/core/audio.js` + `src/main.js` + `src/core/gameLevel.js`）**
+- 主因假設：iOS 的 `AudioContext.createMediaElementSource()` 路由 `<audio>` 會輸出靜音，且 `play()` 失敗後的重試都落在 `setTimeout`（非手勢）必被擋 → `play()` 一旦 resolve 就永不退回 synth
+- 修正：`playBGMFile` 在 **粗指標或 iOS 裝置不走 MediaElementSource**，改原生 `audioEl.play()` 直出（手機端 BGM 因此不依賴 AudioContext 狀態）；移除 `crossOrigin='anonymous'`
+- 補 `audioEl.onerror` 重試/退場、6 秒看門狗（`paused` 或 `currentTime < 0.1` 就退回 synth），並用 `settled` / `bgmAudioEl !== audioEl` 雙重保險避免重複觸發
+- `main.js` 全域 `pointerdown / touchend / mousedown / keydown / click` 都呼叫 `audio.resumeContext()`（手機瀏覽器會在非手勢狀態把 context 掛起）
+- `_buildCurrentLevel` 播 BGM 前先 `resumeContext()`
+- **訓練模式原本完全沒有 BGM**（`_buildCurrentLevel` 在訓練時根本不被呼叫），改在 `_startTrainingMode` 直接 `playBGMFile('./audio/bgm_normal.wav')`
+
+**訓練模式流程重做（`src/main.js` + `src/core/gameTraining.js` + `src/core/gameLoop.js`）**
+- 原流程：點「訓練模式」→ 立刻顯示「選擇訓練目標」選單（此時還沒進關卡）→ 選完才建場景 + 出靶 + 顯示敵人資料卡
+- 新流程：點「訓練模式」→ **直接進訓練場**（場景先建好）→ 場景好了才顯示「選擇訓練目標」按鈕 → 選完才出靶 + 顯示資料卡
+- `main.js` easy 分支改成 `game.trainingEnemy = null; game.start()`，不再直接切 `#training-select`；`.training-btn` 改呼叫 `game.selectTrainingEnemy(type)`
+- `_startTrainingMode()` 不再 `_spawnTrainingEnemies()`、不再 `_showEnemyProfile()`、**不再 `lockPointer()`**，改成播 BGM + 顯示 `#training-select`
+- 新增 `selectTrainingEnemy(type)`：隱藏選單 → 重建 `TrainingRange`（只有 `targetDummy` 才 `noObstacles=true`，沿用原本設計）→ spawn → `_showEnemyProfile` → `lockPointer()`
+- **關鍵**：`gameLoop.start()` 的 `this.lockPointer()` 改成 `if (this.difficulty !== 'easy')` —— 桌機若在選單期間就拿到 pointer lock，滑鼠點擊會導向 canvas，選單按鈕會全部點不到（原本選單是在 `start()` 之前顯示所以沒這問題）
+- `#training-select` z-index `30 → 60`，要蓋過 touch-mode 的 `#hud`(35) 與 `#touch-controls`(30)
+- `restart()` 與 `exitTraining()` 都補 `#training-select` 隱藏（避免殘留）
+
+**部署**：`npm run build` → `npm run deploy` → 線上已驗證 `index-CSmnqL0P.js`
+
+**此輪待使用者回報**
+1. 手機 BGM 是否恢復（含訓練模式）
+2. 訓練模式新流程是否符合預期（先進場景、再出選單按鈕）
+3. 「選單鍵刪掉」的假設是否正確 —— 目前只刪**指南裡那一列**，畫面上的 `#btn-menu` 保留（它是手機唯一的暫停入口）
+
+### 驗證狀態
+- `node --check` 通過（11 個檔案）
+- `npx vite build` 通過（38 modules，index.html 42.16 kB，JS 868.89 kB，僅剩既有的 chunk 過大警告）
+- **尚未實際開啟瀏覽器或手機實測** —— 觸控手感、鏡頭靈敏度、結尾劇情動畫節奏都需要使用者實際看過畫面確認
+
+### 下一步
+1. 用實際手機（或瀏覽器開發者工具的裝置模擬）測橫屏觸控：搖桿推進/衝刺判定、鏡頭拖曳靈敏度、按鈕位置是否擋到手指
+2. 打到最終關驗證結尾劇情動畫：黑邊、鏡頭環繞、文字可讀性、按鈕可點、28 秒自動跳戰果畫面
+3. 打 Boss 體感確認弱化幅度是否足夠（ShieldGuardian 第 2 關、SignalCore 第 4 關）
+
+## 2026-07-25 Session — 最終Boss timer 管理 + weapon.js 子彈效能 + game.js 建構子重組 + 語法修復
+
+### Changes
+
+**SignalCore timer 管理完成**
+- 5 個 `setInterval` 全部以 `this._addTimer(setInterval(...))` 包裝
+- 4 個 `setTimeout`（階段轉換、瞄準射擊、軌道爆裂、飛彈發射）同樣以 `this._addTimer(setTimeout(...))` 包裝
+- `die()` 中 `this._timers.clear()` 完整清除所有計時器
+
+**ShieldGuardian timer 管理（延續上個 session 修復）**
+- 7 個 `setInterval` 以 `this._addTimer` 包裝（上個 session 遺漏 closing `))` 導致 syntax error）
+
+**Weapon.js 子彈射線效能優化**
+- 移除 `WeaponBase.shoot()` 和 `BurstRifle.fireBurst()` 中每發子彈遍歷 `enemies` 建立 `allMeshes` 陣列
+- `Game.animate()` 在敵方更新後預先建立 `this._enemyMeshes`（單純的 mesh 陣列），每幀一次 O(n) 替代每發 O(n²)
+- `WeaponManager.shoot()` 接受 `enemyMeshes` 參數並傳遞至 `WeaponBase.shoot()` / `BurstRifle.shoot()`
+- `Game.onMouseDown()` 傳遞 `this._enemyMeshes`
+
+**Game.js 建構子屬性分組（向後相容）**
+- `this.flags`: running, listening, paused, transitioning, clearReady, endingSequence, devMode, trainingMode
+- `this.progress`: currentLevel, _retryLevel, kills, shotsFired, shotsHit, totalEnemies, startTime, elapsedTime, trainingScore
+- `this.entities`: enemies, datalogPickups
+- `this.effects`: _ambientParticles, _particleVelocities, _debrisList, _explosions, _enemyTrails, _rusherBeepTimers
+- `this.ending`: endingTimer, _endingOverlay, _endingParticles, _endingCameraPos, _endingTarget, _endingOrbitAngle, _endingKeyHandler, _endingClickHandler
+- 透過 `_installFlatGetters()` 為每個屬性建立 getter/setter proxy，既有 `this.xxx` 存取完全相容
+
+**Syntax 錯誤修復**
+- signalCore.js: 5 處 `}, 16)` → `}, 16))`（`_addTimer` 額外關閉括號）
+- signalCore.js: 3 處 `setTimeout` 關閉括號補上 `))`
+- shieldGuardian.js: 7 處 `}, 16)` → `}, 16))`
+
+### Build
+- 37 modules, 860 KB, 0 errors, clean build
+
 ## 2026-07-24 Session — SignalCore 最終Boss 彈速/準度下修 + game.js 重構清理
 
 ### 使用者回饋
