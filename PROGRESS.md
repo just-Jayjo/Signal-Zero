@@ -1,3 +1,5 @@
+> **GitHub 備份（2026-10-17）**：此專案已備份到私人 repo `just-Jayjo/Signal-Zero`。以後完成大幅調整後，記得重新 commit 並 push 一次更新備份。
+
 # PROGRESS — 訊號：零層
 
 ## 2026-09-27 Session 6 — Loop 工程：全站效能／UI／遊戲全面檢查並修改（已部署 `index-Bzlfm3z-.js`）
