@@ -1,4 +1,5 @@
-> **GitHub 備份（2026-10-17）**：此專案已備份到私人 repo `just-Jayjo/Signal-Zero`。以後完成大幅調整後，記得重新 commit 並 push 一次更新備份。
+> **備份狀態**：已於 2026/10/17 備份到 GitHub 私人 repo `just-Jayjo/Signal-Zero`。
+> **下次提醒**：之後只要改完、有進度，記得再 commit 並 push 上傳，備份才會是最新的。
 
 # PROGRESS — 訊號：零層
 
