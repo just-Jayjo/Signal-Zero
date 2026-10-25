@@ -1,5 +1,12 @@
-> **備份狀態**：已於 2026/10/17 備份到 GitHub 私人 repo `just-Jayjo/Signal-Zero`。
+> **備份狀態**：已於 2026/10/17 備份到 repo `just-Jayjo/Signal-Zero`（2026/10/25 由私人改回**公開**，見下方 2026-10-25 條目）。
 > **下次提醒**：之後只要改完、有進度，記得再 commit 並 push 上傳，備份才會是最新的。
+
+## 2026-10-25 — 修復 GitHub Pages 404（repo 已公開＋Pages 重新啟用）
+
+- 現象：線上網站 404。原因：10/17 把 repo 改名（Singal-Zero→Signal-Zero）並設成**私人**，免費方案的私人 repo 會被 GitHub 停用 Pages（用 Pages API 查是 404＝「未啟用」，repo 本身還在）。
+- 修復：`gh repo edit --visibility public` ＋ `gh api -X POST repos/.../pages -f "source[branch]=gh-pages" -f "source[path]=/"`，gh-pages 分支的舊部署內容原樣回來，不需重新 build/deploy。
+- 已驗證：build 狀態 `built`，`https://just-jayjo.github.io/Signal-Zero/` HTTP 200、遊戲 HTML 正常。
+- :warning: **正式網址改成新拼法**：`https://just-jayjo.github.io/Signal-Zero/`（舊網址 `Singal-Zero` 的 repo 頁面會自動轉址，但 Pages 網址**不會**，外部貼的舊連結都失效，要全部更新）。
 
 # PROGRESS — 訊號：零層
 
